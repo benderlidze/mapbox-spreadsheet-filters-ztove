@@ -9,8 +9,10 @@
     <script id="search-js" defer="" src="https://api.mapbox.com/search-js/v1.0.0/web.js"></script>
 
 
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+    <script src="https://npmcdn.com/@turf/turf/turf.min.js"></script>
 
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -158,7 +160,10 @@
                                 }
                             }
                         });
+
                     map.fitBounds(bounds, { padding: 150 });
+
+
                     console.log(points);
                     appData.points = points;
                     map.getSource('points').setData({
@@ -207,17 +212,54 @@
                     .addTo(map);
             });
 
-            map.on("moveend", filterByBounds);
+            map.on("moveend", () => {
+                filterByBounds(map.getBounds())
+            });
 
-            function filterByBounds() {
-                const bounds = map.getBounds();
-                const filteredPoints = appData.points.filter(point => {
-                    const coords = point.geometry.coordinates;
-                    return bounds.contains(coords);
+            function filterByBounds(bounds) {
+                // Create a polygon from the current bounds
+                const bbox = [
+                    bounds.getWest(),
+                    bounds.getSouth(),
+                    bounds.getEast(),
+                    bounds.getNorth()
+                ];
+                const bboxPolygon = turf.bboxPolygon(bbox);
+
+                // Add a source and layer for the bbox if they don't exist yet
+                if (!map.getSource('bbox')) {
+                    map.addSource('bbox', {
+                        type: 'geojson',
+                        data: bboxPolygon
+                    });
+
+                    map.addLayer({
+                        'id': 'bbox-layer',
+                        'type': 'line',
+                        'source': 'bbox',
+                        'layout': {},
+                        'paint': {
+                            'line-color': '#088',
+                            'line-width': 2,
+                            'line-dasharray': [2, 2]
+                        }
+                    });
+                } else {
+                    // Update existing source with new bbox
+                    map.getSource('bbox').setData(bboxPolygon);
+                }
+
+                const visiblePoints = appData.points.filter(point => {
+                    return turf.booleanPointInPolygon(point, bboxPolygon);
                 });
-                console.log(filteredPoints);
 
-                generateItems(filteredPoints);
+                // Update the list
+                generateItems(visiblePoints);
+
+                // Debug information
+                console.log('Bounds:', bbox);
+                console.log('Total points:', appData.points.length);
+                console.log('Visible points:', visiblePoints.length);
             }
 
             function generateItems(itemsArray) {
