@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Style circles with a data-driven property</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-assembly/v1.3.0/assembly.min.css" rel="stylesheet">
+    <script id="search-js" defer="" src="https://api.mapbox.com/search-js/v1.0.0/web.js"></script>
+
+
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            flex: 1;
+            height: 100vh;
+        }
+
+        .mapboxgl-popup.mapboxgl-popup-anchor-top {
+            max-width: 400px !important;
+        }
+
+        .main {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+        }
+
+        #info {
+            display: flex;
+            flex-direction: column;
+            width: 30%;
+            padding: 20px;
+            background: white;
+            overflow-y: auto;
+        }
+
+        .location-item {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background: #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .location-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .location-name {
+            margin: 0 0 8px 0;
+            font-size: 18px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .location-detail {
+            margin: 4px 0;
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+        }
+
+        .location-detail svg {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+        }
+
+        .priority-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="main">
+        <div id="info"></div>
+        <div id="map"></div>
+    </div>
+
+    <script>
+
+        const infoDiv = document.getElementById('info');
+
+        const appData = {
+            points: [],
+        };
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/mapbox/light-v11',
+            zoom: 0,
+            center: { lng: -0.02665959675479712, lat: 2 },
+            projection: 'mercator'
+        });
+
+        window.addEventListener('load', () => {
+            const searchBox = new MapboxSearchBox();
+            searchBox.accessToken = mapboxgl.accessToken;
+            searchBox.marker = true;
+            searchBox.mapboxgl = mapboxgl;
+            map.addControl(searchBox);
+        });
+
+
+        map.on('load', () => {
+
+
+            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?output=csv")
+                .then(data => {
+                    console.log(data);
+
+                    const bounds = new mapboxgl.LngLatBounds();
+
+                    const points = data
+                        .map(row => {
+                            const lat = parseFloat(row["Latitude"]);
+                            const lon = parseFloat(row["Longitude"]);
+                            const name = row["Name"];
+                            const country = row["Country"];
+                            const priority = row["Priority"];
+
+                            bounds.extend([lon, lat]);
+
+                            return {
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'Point',
+                                    coordinates: [lon, lat]
+                                },
+                                properties: {
+                                    name,
+                                    country,
+                                    priority,
+                                }
+                            }
+                        });
+                    map.fitBounds(bounds, { padding: 150 });
+                    console.log(points);
+                    appData.points = points;
+                    map.getSource('points').setData({
+                        type: 'FeatureCollection',
+                        features: appData.points
+                    });
+                });
+
+            map.addSource('points', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            map.addLayer({
+                id: 'points',
+                source: 'points',
+                type: 'circle',
+                paint: {
+                    'circle-radius': 5,
+                    'circle-color': 'red',
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': 'white'
+                }
+            });
+
+
+            map.on("mouseenter", "points", (e) => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on("mouseleave", "points", (e) => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on("click", "points", (e) => {
+                const row = e.features[0].properties;
+                const popup = new mapboxgl.Popup()
+                    .setLngLat(e.lngLat)
+                    .setHTML(`
+                        <h3>${row.name}</h3>
+                        <p>${row.country}</p>
+                        <p>${row.priority}</p>
+                    `)
+                    .addTo(map);
+            });
+
+            map.on("moveend", filterByBounds);
+
+            function filterByBounds() {
+                const bounds = map.getBounds();
+                const filteredPoints = appData.points.filter(point => {
+                    const coords = point.geometry.coordinates;
+                    return bounds.contains(coords);
+                });
+                console.log(filteredPoints);
+
+                generateItems(filteredPoints);
+            }
+
+            function generateItems(itemsArray) {
+
+                infoDiv.innerHTML = '';
+
+                itemsArray.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'location-item';
+                    div.innerHTML = `
+                        <h3 class="location-name">${item.properties.name}</h3>
+                        <div class="location-detail">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                                <circle cx="12" cy="10" r="3" />
+                            </svg>
+                            ${item.properties.country}
+                        </div>
+                        <div class="location-detail">
+                            <span class="priority-tag">${item.properties.priority}</span>
+                        </div>
+                    `;
+
+                    div.addEventListener('click', () => {
+                        map.flyTo({
+                            center: item.geometry.coordinates,
+                            zoom: 12
+                        });
+                    });
+
+                    infoDiv.appendChild(div);
+                });
+            }
+
+        });
+
+    </script>
+</body>
+
+</html>
