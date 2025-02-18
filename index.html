@@ -91,6 +91,13 @@
             background: #e3f2fd;
             color: #1976d2;
         }
+
+        /* New style for search control */
+        .mapboxgl-ctrl.mapboxgl-ctrl-group {
+            width: 100% !important;
+            padding: 5px !important;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 
@@ -226,29 +233,6 @@
                 ];
                 const bboxPolygon = turf.bboxPolygon(bbox);
 
-                // Add a source and layer for the bbox if they don't exist yet
-                if (!map.getSource('bbox')) {
-                    map.addSource('bbox', {
-                        type: 'geojson',
-                        data: bboxPolygon
-                    });
-
-                    map.addLayer({
-                        'id': 'bbox-layer',
-                        'type': 'line',
-                        'source': 'bbox',
-                        'layout': {},
-                        'paint': {
-                            'line-color': '#088',
-                            'line-width': 2,
-                            'line-dasharray': [2, 2]
-                        }
-                    });
-                } else {
-                    // Update existing source with new bbox
-                    map.getSource('bbox').setData(bboxPolygon);
-                }
-
                 const visiblePoints = appData.points.filter(point => {
                     return turf.booleanPointInPolygon(point, bboxPolygon);
                 });
@@ -256,10 +240,6 @@
                 // Update the list
                 generateItems(visiblePoints);
 
-                // Debug information
-                console.log('Bounds:', bbox);
-                console.log('Total points:', appData.points.length);
-                console.log('Visible points:', visiblePoints.length);
             }
 
             function generateItems(itemsArray) {
