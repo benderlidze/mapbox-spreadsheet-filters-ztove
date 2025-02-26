@@ -198,6 +198,7 @@
                                 lat >= -90 && lat <= 90 &&
                                 lon >= -180 && lon <= 180;
                         })
+                        .filter(row => row.FALSE === "TRUE")
                         .map(row => {
                             const lat = parseFloat(row["Latitude"]);
                             const lon = parseFloat(row["Longitude"]);
@@ -409,7 +410,7 @@
                     });
 
                     container.appendChild(h3);
-                    item.properties.FALSE === "TRUE" && container.appendChild(available);
+                    container.appendChild(available);
                     container.appendChild(toggleDiv);
                     container.appendChild(additionalInfo);
 
