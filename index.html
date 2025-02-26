@@ -8,18 +8,19 @@
     <link href="https://api.mapbox.com/mapbox-assembly/v1.3.0/assembly.min.css" rel="stylesheet">
     <script id="search-js" defer="" src="https://api.mapbox.com/search-js/v1.0.0/web.js"></script>
 
+    <!-- Google Fonts - Rubik -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
 
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 
     <script src="https://npmcdn.com/@turf/turf/turf.min.js"></script>
-
-
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body {
             margin: 0;
             padding: 0;
+            font-family: 'Rubik', sans-serif;
         }
 
         #map {
@@ -57,7 +58,7 @@
         }
 
         .location-item:hover {
-            transform: translateY(-2px);
+            /* transform: translateY(-2px); */
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
 
@@ -66,6 +67,7 @@
             font-size: 18px;
             color: #333;
             font-weight: 600;
+            font-family: 'Rubik', sans-serif;
         }
 
         .location-detail {
@@ -92,11 +94,55 @@
             color: #1976d2;
         }
 
-        /* New style for search control */
-        .mapboxgl-ctrl.mapboxgl-ctrl-group {
-            width: 100% !important;
-            padding: 5px !important;
-            box-sizing: border-box;
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .info-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out;
+            opacity: 0;
+            margin-top: 0;
+        }
+
+        .info-detail.expanded {
+            max-height: 500px;
+            /* Set to a value larger than your content would need */
+            opacity: 1;
+            margin-top: 10px;
+        }
+
+        .toggle-btn {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .toggle-icon.rotated {
+            transform: rotate(45deg);
+        }
+
+        .availabel-detail {
+            color: #1daf30;
+            font-size: 14px;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -134,6 +180,7 @@
             map.addControl(searchBox);
         });
 
+        const bounds = new mapboxgl.LngLatBounds();
 
         map.on('load', () => {
 
@@ -142,9 +189,15 @@
                 .then(data => {
                     console.log(data);
 
-                    const bounds = new mapboxgl.LngLatBounds();
-
+                    // Filter out rows with invalid coordinates
                     const points = data
+                        .filter((row) => {
+                            const lat = parseFloat(row["Latitude"]);
+                            const lon = parseFloat(row["Longitude"]);
+                            return !isNaN(lat) && !isNaN(lon) &&
+                                lat >= -90 && lat <= 90 &&
+                                lon >= -180 && lon <= 180;
+                        })
                         .map(row => {
                             const lat = parseFloat(row["Latitude"]);
                             const lon = parseFloat(row["Longitude"]);
@@ -152,6 +205,7 @@
                             const country = row["Country"];
                             const priority = row["Priority"];
 
+                            // Safely extend bounds with valid coordinates
                             bounds.extend([lon, lat]);
 
                             return {
@@ -163,20 +217,30 @@
                                 properties: {
                                     name,
                                     country,
-                                    priority,
+                                    ...row
                                 }
                             }
                         });
 
-                    map.fitBounds(bounds, { padding: 150 });
+                    map.getSource('points').setData({
+                        type: 'FeatureCollection',
+                        features: points
+                    });
+
+                    // Only fit bounds if we have valid points
+
+                    map.fitBounds(bounds, {
+                        padding: 50,
+                        maxZoom: 10
+                    });
 
 
                     console.log(points);
                     appData.points = points;
-                    map.getSource('points').setData({
-                        type: 'FeatureCollection',
-                        features: appData.points
-                    });
+
+                })
+                .catch(error => {
+                    console.error("Error loading CSV data:", error);
                 });
 
             map.addSource('points', {
@@ -233,12 +297,36 @@
                 ];
                 const bboxPolygon = turf.bboxPolygon(bbox);
 
+                // // Add a source and layer for the bbox if they don't exist yet
+                // if (!map.getSource('bbox')) {
+                //     map.addSource('bbox', {
+                //         type: 'geojson',
+                //         data: bboxPolygon
+                //     });
+
+                //     map.addLayer({
+                //         'id': 'bbox-layer',
+                //         'type': 'line',
+                //         'source': 'bbox',
+                //         'layout': {},
+                //         'paint': {
+                //             'line-color': '#088',
+                //             'line-width': 2,
+                //             'line-dasharray': [2, 2]
+                //         }
+                //     });
+                // } else {
+                //     // Update existing source with new bbox
+                //     map.getSource('bbox').setData(bboxPolygon);
+                // }
+
                 const visiblePoints = appData.points.filter(point => {
                     return turf.booleanPointInPolygon(point, bboxPolygon);
                 });
 
                 // Update the list
                 generateItems(visiblePoints);
+
 
             }
 
@@ -247,30 +335,86 @@
                 infoDiv.innerHTML = '';
 
                 itemsArray.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'location-item';
-                    div.innerHTML = `
-                        <h3 class="location-name">${item.properties.name}</h3>
-                        <div class="location-detail">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                                <circle cx="12" cy="10" r="3" />
-                            </svg>
-                            ${item.properties.country}
-                        </div>
-                        <div class="location-detail">
-                            <span class="priority-tag">${item.properties.priority}</span>
-                        </div>
-                    `;
 
-                    div.addEventListener('click', () => {
+                    const container = document.createElement('div');
+                    container.className = 'location-item';
+
+
+                    const h3 = document.createElement('h3');
+                    h3.className = 'location-name';
+                    h3.innerText = item.properties.name;
+                    h3.addEventListener('click', () => {
                         map.flyTo({
                             center: item.geometry.coordinates,
                             zoom: 12
                         });
                     });
 
-                    infoDiv.appendChild(div);
+                    const available = document.createElement('div');
+                    available.className = 'availabel-detail';
+                    available.innerHTML = `Ztove is available`;
+
+
+                    const toggleDiv = document.createElement('div');
+                    toggleDiv.className = 'location-detail toggle-btn';
+                    toggleDiv.innerHTML = `
+                        <div class="row" style="align-items: center; width: 100%; user-select:none">
+                            Opening hours and address
+                            <svg class="toggle-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M4 12h16M12 4v16" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                    `;
+
+                    const monday = `Monday: ${item.properties.Monday || 'N/A'}`;
+                    const tuesday = `Tuesday: ${item.properties.Tuesday || 'N/A'}`;
+                    const wednesday = `Wednesday: ${item.properties.Wednesday || 'N/A'}`;
+                    const thursday = `Thursday: ${item.properties.Thursday || 'N/A'}`;
+                    const friday = `Friday: ${item.properties.Friday || 'N/A'}`;
+                    const saturday = `Saturday: ${item.properties.Saturday || 'N/A'}`;
+                    const sunday = `Sunday: ${item.properties.Sunday || 'N/A'}`;
+
+                    const address = item.properties.Address + ', ' + item.properties.City + ', ' + item.properties.Country;
+                    const additionalInfo = document.createElement('div');
+                    additionalInfo.className = 'info-detail';
+                    additionalInfo.innerHTML = `
+                        <div class="column">
+                            <div>${monday}</div>
+                            <div>${tuesday}</div>
+                            <div>${wednesday}</div>
+                            <div>${thursday}</div>
+                            <div>${friday}</div>
+                            <div>${saturday}</div>
+                            <div>${sunday}</div>
+                        </div>
+                        <div class="row">
+                            <div style="width:15px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                                    <circle cx="12" cy="10" r="3" />
+                                </svg>
+                            </div>
+                            <div>${address}</div>
+                        </div>
+                    `;
+
+                    // Add toggle functionality
+                    toggleDiv.addEventListener('click', () => {
+                        // Toggle expanded class on additionalInfo
+                        additionalInfo.classList.toggle('expanded');
+
+                        // Toggle the rotation of the plus icon
+                        const toggleIcon = toggleDiv.querySelector('.toggle-icon');
+                        toggleIcon.classList.toggle('rotated');
+                    });
+
+                    container.appendChild(h3);
+                    container.appendChild(available);
+                    container.appendChild(toggleDiv);
+                    container.appendChild(additionalInfo);
+
+
+                    infoDiv.appendChild(container);
                 });
             }
 
