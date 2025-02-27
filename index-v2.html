@@ -177,41 +177,6 @@
             projection: 'mercator'
         });
 
-        // function forwardGeocoder(query) {
-
-        //     console.log('query', query);
-        //     const matchingFeatures = [];
-        //     for (const feature of customData.features) {
-        //         // Handle queries with different capitalization
-        //         // than the source data by calling toLowerCase().
-        //         if (
-        //             feature.properties.title
-        //                 .toLowerCase()
-        //                 .includes(query.toLowerCase())
-        //         ) {
-        //             // Add a tree emoji as a prefix for custom
-        //             // data results using carmen geojson format:
-        //             // https://github.com/mapbox/carmen/blob/master/carmen-geojson.md
-        //             feature['place_name'] = `🌲 ${feature.properties.title}`;
-        //             feature['center'] = feature.geometry.coordinates;
-        //             feature['place_type'] = ['park'];
-        //             matchingFeatures.push(feature);
-        //         }
-        //     }
-        //     return matchingFeatures;
-        // }
-
-        // Add the control to the map.
-        map.addControl(
-            new MapboxGeocoder({
-                accessToken: mapboxgl.accessToken,
-                // localGeocoder: forwardGeocoder,
-                countries: 'no,se,fi,dk',
-                zoom: 14,
-                mapboxgl: mapboxgl
-            })
-        );
-
 
 
         const bounds = new mapboxgl.LngLatBounds();
@@ -473,6 +438,188 @@
 
         });
 
+        // Add this code immediately after your map initialization
+
+        // Create a custom geocoder class that extends MapboxGeocoder
+        class CustomizedGeocoder extends MapboxGeocoder {
+            constructor(options) {
+                super(options);
+                // Store the original _typeahead method
+                this._originalTypeahead = this._typeahead;
+                // Override the _typeahead method with our custom implementation
+                this._typeahead = this._customTypeahead.bind(this);
+            }
+
+            // Custom method to intercept and process results before displaying dropdown
+            _customTypeahead(features, callback) {
+                console.log('Intercepted original results:', features);
+
+                // Process the features before showing them
+                const processedFeatures = this.processGeocoderResults(features);
+
+                // Call the original method with our processed features
+                return this._originalTypeahead.call(this, processedFeatures, callback);
+            }
+
+            // This is your custom processing function where you can modify the results
+            processGeocoderResults(features) {
+                // If there are no features, return empty array
+                if (!features || features.length === 0) return [];
+
+                console.log('Processing geocoder results...');
+
+                // Example processing: 
+                // 1. Add custom prefix to place names
+                // 2. Calculate distances from map center
+                // 3. Add custom properties
+                const processedFeatures = features.map(feature => {
+                    // Deep clone the feature to avoid modifying original
+                    const processedFeature = JSON.parse(JSON.stringify(feature));
+
+                    // 1. Add prefix to place name based on type
+                    if (processedFeature.place_type && processedFeature.place_type[0]) {
+                        const type = processedFeature.place_type[0];
+
+                        if (type === 'country') {
+                            processedFeature.place_name = '🌍 ' + processedFeature.place_name;
+                        } else if (type === 'region' || type === 'district') {
+                            processedFeature.place_name = '🏙️ ' + processedFeature.place_name;
+                        } else if (type === 'locality' || type === 'place') {
+                            processedFeature.place_name = '🏢 ' + processedFeature.place_name;
+                        } else {
+                            processedFeature.place_name = '📍 ' + processedFeature.place_name;
+                        }
+                    }
+
+                    // 2. Calculate distance from map center if coordinates are available
+                    if (processedFeature.center && map.getCenter()) {
+                        try {
+                            const distance = turf.distance(
+                                turf.point([map.getCenter().lng, map.getCenter().lat]),
+                                turf.point(processedFeature.center),
+                                { units: 'kilometers' }
+                            );
+
+                            // Add distance as a property
+                            processedFeature.properties = processedFeature.properties || {};
+                            processedFeature.properties.distance = distance.toFixed(1);
+
+                            // Add distance to the place name
+                            processedFeature.place_name += ` (${distance.toFixed(1)} km)`;
+                        } catch (e) {
+                            console.error('Error calculating distance:', e);
+                        }
+                    }
+
+                    // 3. Add any other custom properties or modifications
+                    processedFeature.properties = processedFeature.properties || {};
+                    processedFeature.properties.processed = true;
+                    processedFeature.properties.processedAt = new Date().toISOString();
+
+                    return processedFeature;
+                });
+
+                // Add custom results at the beginning
+                const customResults = [
+                    {
+                        id: 'custom-result-1',
+                        place_name: '⭐ CUSTOM: Prioritized Result',
+                        center: [10.7522, 59.9139], // Oslo coordinates
+                        place_type: ['custom'],
+                        properties: {
+                            custom: true,
+                            id: 'custom-1',
+                            description: 'This is a custom result added during processing'
+                        }
+                    }
+                ];
+
+                // Combine custom results with processed API results
+                const finalResults = [...customResults, ...processedFeatures];
+
+                console.log('Processed results:', finalResults);
+                return finalResults;
+            }
+        }
+
+        // Create an instance of our custom geocoder
+        const geocoder = new CustomizedGeocoder({
+            accessToken: mapboxgl.accessToken,
+            countries: 'no,se,fi,dk',
+            zoom: 14,
+            mapboxgl: mapboxgl,
+            placeholder: 'Type "Osl" to see custom processing...',
+            // Custom item rendering (optional)
+            render: function (item) {
+                let markup;
+
+                // Custom rendering for items
+                if (item.properties && item.properties.custom) {
+                    // Render custom items differently
+                    markup = `
+                        <div class='mapboxgl-ctrl-geocoder--suggestion'>
+                            <div class='mapboxgl-ctrl-geocoder--suggestion-title' style='color:#4264fb;font-weight:bold'>
+                                ${item.place_name}
+                            </div>
+                            <div class='mapboxgl-ctrl-geocoder--suggestion-address'>
+                                ${item.properties.description || 'Custom result'}
+                            </div>
+                        </div>
+                    `;
+                } else if (item.properties && item.properties.distance) {
+                    // Render items with distance calculation
+                    markup = `
+                        <div class='mapboxgl-ctrl-geocoder--suggestion'>
+                            <div class='mapboxgl-ctrl-geocoder--suggestion-title'>
+                                ${item.text || item.place_name.split(',')[0]}
+                            </div>
+                            <div class='mapboxgl-ctrl-geocoder--suggestion-address'>
+                                ${item.properties.distance}km away - ${item.place_name}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Default rendering
+                    markup = `
+                        <div class='mapboxgl-ctrl-geocoder--suggestion'>
+                            <div class='mapboxgl-ctrl-geocoder--suggestion-title'>
+                                ${item.text || item.place_name.split(',')[0]}
+                            </div>
+                            <div class='mapboxgl-ctrl-geocoder--suggestion-address'>
+                                ${item.place_name}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return markup;
+            }
+        });
+
+        // Add the geocoder to the map
+        map.addControl(geocoder);
+
+        // Optional: Add event listeners for debugging
+        geocoder.on('results', function (results) {
+            console.log('Results event after processing:', results);
+        });
+
+        geocoder.on('result', function (event) {
+            const result = event.result;
+            console.log('Selected result:', result);
+
+            if (result.properties && result.properties.custom) {
+                console.log('Custom item selected:', result.properties.id);
+                // Handle custom item selection
+                alert('Selected custom item: ' + result.properties.id);
+            }
+        });
+
+        geocoder.on('error', function (error) {
+            console.error('Geocoder error:', error);
+        });
+
+        console.log('Custom geocoder initialized and ready');
     </script>
 </body>
 
