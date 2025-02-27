@@ -5,8 +5,13 @@
     <meta charset="utf-8">
     <title>Style circles with a data-driven property</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-    <link href="https://api.mapbox.com/mapbox-assembly/v1.3.0/assembly.min.css" rel="stylesheet">
-    <script id="search-js" defer="" src="https://api.mapbox.com/search-js/v1.0.0/web.js"></script>
+
+    <script
+        src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
+    <link rel="stylesheet"
+        href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css"
+        type="text/css">
+
 
     <!-- Google Fonts - Rubik -->
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
@@ -172,13 +177,13 @@
             projection: 'mercator'
         });
 
-        window.addEventListener('load', () => {
-            const searchBox = new MapboxSearchBox();
-            searchBox.accessToken = mapboxgl.accessToken;
-            searchBox.marker = true;
-            searchBox.mapboxgl = mapboxgl;
-            map.addControl(searchBox);
-        });
+        map.addControl(
+            new MapboxGeocoder({
+                accessToken: mapboxgl.accessToken,
+                countries: 'no,se,fi,dk',
+                mapboxgl: mapboxgl
+            })
+        );
 
         const bounds = new mapboxgl.LngLatBounds();
 
@@ -339,7 +344,6 @@
 
                     const container = document.createElement('div');
                     container.className = 'location-item';
-
 
                     const h3 = document.createElement('h3');
                     h3.className = 'location-name';
