@@ -177,13 +177,42 @@
             projection: 'mercator'
         });
 
+        // function forwardGeocoder(query) {
+
+        //     console.log('query', query);
+        //     const matchingFeatures = [];
+        //     for (const feature of customData.features) {
+        //         // Handle queries with different capitalization
+        //         // than the source data by calling toLowerCase().
+        //         if (
+        //             feature.properties.title
+        //                 .toLowerCase()
+        //                 .includes(query.toLowerCase())
+        //         ) {
+        //             // Add a tree emoji as a prefix for custom
+        //             // data results using carmen geojson format:
+        //             // https://github.com/mapbox/carmen/blob/master/carmen-geojson.md
+        //             feature['place_name'] = `🌲 ${feature.properties.title}`;
+        //             feature['center'] = feature.geometry.coordinates;
+        //             feature['place_type'] = ['park'];
+        //             matchingFeatures.push(feature);
+        //         }
+        //     }
+        //     return matchingFeatures;
+        // }
+
+        // Add the control to the map.
         map.addControl(
             new MapboxGeocoder({
                 accessToken: mapboxgl.accessToken,
+                // localGeocoder: forwardGeocoder,
                 countries: 'no,se,fi,dk',
+                zoom: 14,
                 mapboxgl: mapboxgl
             })
         );
+
+
 
         const bounds = new mapboxgl.LngLatBounds();
 
