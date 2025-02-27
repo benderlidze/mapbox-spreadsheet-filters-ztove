@@ -188,66 +188,73 @@
         const bounds = new mapboxgl.LngLatBounds();
 
         map.on('load', () => {
+            // Load the custom icon image
+            map.loadImage('icon_.png', (error, image) => {
+                if (error) throw error;
 
+                // Add the image to the map's style
+                map.addImage('custom-marker', image);
 
-            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?output=csv")
-                .then(data => {
-                    console.log(data);
+                // Now proceed with data loading
+                d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?output=csv")
+                    .then(data => {
+                        console.log(data);
 
-                    // Filter out rows with invalid coordinates
-                    const points = data
-                        .filter((row) => {
-                            const lat = parseFloat(row["Latitude"]);
-                            const lon = parseFloat(row["Longitude"]);
-                            return !isNaN(lat) && !isNaN(lon) &&
-                                lat >= -90 && lat <= 90 &&
-                                lon >= -180 && lon <= 180;
-                        })
-                        .filter(row => row.FALSE === "TRUE")
-                        .map(row => {
-                            const lat = parseFloat(row["Latitude"]);
-                            const lon = parseFloat(row["Longitude"]);
-                            const name = row["Name"];
-                            const country = row["Country"];
-                            const priority = row["Priority"];
+                        // Filter out rows with invalid coordinates
+                        const points = data
+                            .filter((row) => {
+                                const lat = parseFloat(row["Latitude"]);
+                                const lon = parseFloat(row["Longitude"]);
+                                return !isNaN(lat) && !isNaN(lon) &&
+                                    lat >= -90 && lat <= 90 &&
+                                    lon >= -180 && lon <= 180;
+                            })
+                            .filter(row => row.FALSE === "TRUE")
+                            .map(row => {
+                                const lat = parseFloat(row["Latitude"]);
+                                const lon = parseFloat(row["Longitude"]);
+                                const name = row["Name"];
+                                const country = row["Country"];
+                                const priority = row["Priority"];
 
-                            // Safely extend bounds with valid coordinates
-                            bounds.extend([lon, lat]);
+                                // Safely extend bounds with valid coordinates
+                                bounds.extend([lon, lat]);
 
-                            return {
-                                type: 'Feature',
-                                geometry: {
-                                    type: 'Point',
-                                    coordinates: [lon, lat]
-                                },
-                                properties: {
-                                    name,
-                                    country,
-                                    ...row
+                                return {
+                                    type: 'Feature',
+                                    geometry: {
+                                        type: 'Point',
+                                        coordinates: [lon, lat]
+                                    },
+                                    properties: {
+                                        name,
+                                        country,
+                                        ...row
+                                    }
                                 }
-                            }
+                            });
+
+                        map.getSource('points').setData({
+                            type: 'FeatureCollection',
+                            features: points
                         });
 
-                    map.getSource('points').setData({
-                        type: 'FeatureCollection',
-                        features: points
+                        // Only fit bounds if we have valid points
+
+                        map.fitBounds(bounds, {
+                            padding: 50,
+                            maxZoom: 10
+                        });
+
+
+                        console.log(points);
+                        appData.points = points;
+
+                    })
+                    .catch(error => {
+                        console.error("Error loading CSV data:", error);
                     });
-
-                    // Only fit bounds if we have valid points
-
-                    map.fitBounds(bounds, {
-                        padding: 50,
-                        maxZoom: 10
-                    });
-
-
-                    console.log(points);
-                    appData.points = points;
-
-                })
-                .catch(error => {
-                    console.error("Error loading CSV data:", error);
-                });
+            });
 
             map.addSource('points', {
                 type: 'geojson',
@@ -260,14 +267,27 @@
             map.addLayer({
                 id: 'points',
                 source: 'points',
-                type: 'circle',
-                paint: {
-                    'circle-radius': 5,
-                    'circle-color': 'red',
-                    'circle-stroke-width': 1,
-                    'circle-stroke-color': 'white'
+                type: 'symbol',
+                layout: {
+                    'icon-image': 'custom-marker',
+                    'icon-size': 1.0,
+                    'icon-allow-overlap': true,
+                    'icon-anchor': 'bottom'
                 }
             });
+
+            // map.addLayer({
+            //     id: 'points-label',
+            //     type: 'circle',
+            //     source: 'points',
+            //     paint: {
+            //         'circle-radius': 6,
+            //         'circle-color': '#1976d2',
+            //         'circle-stroke-color': '#fff',
+            //         'circle-stroke-width': 1
+            //     }
+
+            // });
 
 
             map.on("mouseenter", "points", (e) => {
