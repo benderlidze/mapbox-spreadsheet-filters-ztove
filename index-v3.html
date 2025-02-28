@@ -227,7 +227,6 @@
         mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
         const map = new mapboxgl.Map({
             container: 'map',
-            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
             style: 'mapbox://styles/mapbox/light-v11',
             zoom: 0,
             center: { lng: -0.02665959675479712, lat: 2 },
@@ -247,7 +246,6 @@
             }
 
             try {
-                // Make request to Mapbox Geocoding API
                 const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`;
                 const params = new URLSearchParams({
                     access_token: mapboxgl.accessToken,
@@ -276,20 +274,69 @@
             const firstResult = features[0].center
             console.log('firstResult', firstResult);
 
+            if (appData.points.length > 0) {
+                // Define a point from the first result coordinates
+                const searchPoint = turf.point(firstResult);
 
-            // Add a custom result
-            features.unshift({
-                id: 'custom-result',
-                place_name: 'My Custom Location',
-                center: [-122.4, 37.8],
-                geometry: {
-                    type: 'Point',
-                    coordinates: [-122.4, 37.8]
-                },
-                properties: {
-                    custom: true
-                }
-            });
+                // Find nearby points within 30km
+                const nearbyPoints = appData.points
+                    .map(point => {
+                        // Calculate distance in kilometers
+                        const pointCoords = point.geometry.coordinates;
+                        const pointObj = turf.point(pointCoords);
+                        const distance = turf.distance(searchPoint, pointObj, { units: 'kilometers' });
+
+                        return {
+                            ...point,
+                            distance: distance
+                        };
+                    })
+                    .filter(point => point.distance <= 30) // Only points within 30km
+                    .sort((a, b) => a.distance - b.distance) // Sort by distance ascending
+                    .slice(0, 3) // Take first 3 results
+                    .sort((a, b) => b.distance - a.distance); // Sort by priority
+
+                // Add nearby points to features
+                nearbyPoints.forEach((point, index) => {
+
+                    const address = point.properties.Address + ' ' + point.properties.City + ', ' + point.properties.Country;
+
+                    features.unshift({
+                        id: `nearby-${index}`,
+                        place_name: `<img src="icon_.png" style="width:8px;"> ${point.properties.name} (${point.distance.toFixed(1)} km)`,
+                        text_name: point.properties.name,
+                        center: point.geometry.coordinates,
+                        geometry: {
+                            type: 'Point',
+                            coordinates: point.geometry.coordinates
+                        },
+                        properties: {
+                            ...point.properties,
+                            distance: point.distance,
+                            isNearbyZtove: true
+                        },
+                        address
+                    });
+                });
+
+                console.log(`Added ${nearbyPoints.length} nearby Ztove locations to results`);
+            }
+
+
+
+            // // Add a custom result
+            // features.unshift({
+            //     id: 'custom-result',
+            //     place_name: 'My Custom Location',
+            //     center: [-122.4, 37.8],
+            //     geometry: {
+            //         type: 'Point',
+            //         coordinates: [-122.4, 37.8]
+            //     },
+            //     properties: {
+            //         custom: true
+            //     }
+            // });
 
 
             // You can add more custom results here or filter out unwanted results
@@ -302,12 +349,12 @@
 
                     resultItem.innerHTML = `
                         <div class="geocoder-result-name">${feature.place_name.split(',')[0]}</div>
-                        <div class="geocoder-result-address">${feature.place_name}</div>
+                        <div class="geocoder-result-address">${feature.address}</div>
                     `;
 
                     resultItem.addEventListener('click', () => {
                         // Handle selection of a result
-                        geocoderInput.value = feature.place_name;
+                        geocoderInput.value = feature.text_name;
                         geocoderResults.style.display = 'none';
 
                         // Fly to the selected location
@@ -316,10 +363,10 @@
                             zoom: 13
                         });
 
-                        // Optionally add a marker
-                        new mapboxgl.Marker()
-                            .setLngLat(feature.center)
-                            .addTo(map);
+                        // // Optionally add a marker
+                        // new mapboxgl.Marker()
+                        //     .setLngLat(feature.center)
+                        //     .addTo(map);
                     });
 
                     geocoderResults.appendChild(resultItem);
