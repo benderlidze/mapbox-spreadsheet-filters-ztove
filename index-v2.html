@@ -444,101 +444,161 @@
         class CustomizedGeocoder extends MapboxGeocoder {
             constructor(options) {
                 super(options);
-                // Store the original _typeahead method
+
+                // Since direct overriding might not work, we'll use event listeners
+                // Save original methods for reference
                 this._originalTypeahead = this._typeahead;
-                // Override the _typeahead method with our custom implementation
-                this._typeahead = this._customTypeahead.bind(this);
+
+                // Bind our methods to maintain context
+                this._geocode = this._geocode.bind(this);
+                this._processResults = this._processResults.bind(this);
+
+                // Add event listeners to intercept the process
+                this.on('results', this._interceptResults);
+                this.on('result', this._interceptResult);
+
+                // Flag to prevent recursion when we trigger our own search
+                this._processingCustomResults = false;
             }
 
-            // Custom method to intercept and process results before displaying dropdown
-            _customTypeahead(features, callback) {
-                console.log('Intercepted original results:', features);
-
-                // Process the features before showing them
-                const processedFeatures = this.processGeocoderResults(features);
-
-                // Call the original method with our processed features
-                return this._originalTypeahead.call(this, processedFeatures, callback);
+            // Override the _geocode method to intercept the geocoding request
+            _geocode(searchInput) {
+                console.log('Geocoding search input:', searchInput);
+                // Continue with original behavior
+                return super._geocode(searchInput);
             }
 
-            // This is your custom processing function where you can modify the results
-            processGeocoderResults(features) {
-                // If there are no features, return empty array
-                if (!features || features.length === 0) return [];
+            // Add an event listener to intercept results before they're displayed
+            _interceptResults = (event) => {
+                console.log('Intercepted results event:', event);
 
-                console.log('Processing geocoder results...');
+                // Avoid recursion
+                if (this._processingCustomResults) return;
 
-                // Example processing: 
-                // 1. Add custom prefix to place names
-                // 2. Calculate distances from map center
-                // 3. Add custom properties
-                const processedFeatures = features.map(feature => {
-                    // Deep clone the feature to avoid modifying original
-                    const processedFeature = JSON.parse(JSON.stringify(feature));
+                // Process the results from the event
+                if (event && event.features) {
+                    // Process and modify the results
+                    const processedFeatures = this._processResults(event);
 
-                    // 1. Add prefix to place name based on type
-                    if (processedFeature.place_type && processedFeature.place_type[0]) {
-                        const type = processedFeature.place_type[0];
+                    // You can't directly modify the event, but you could clear and re-search
+                    // with your custom data if needed
+                    console.log('Processed features count:', processedFeatures.features.length);
 
-                        if (type === 'country') {
-                            processedFeature.place_name = '🌍 ' + processedFeature.place_name;
-                        } else if (type === 'region' || type === 'district') {
-                            processedFeature.place_name = '🏙️ ' + processedFeature.place_name;
-                        } else if (type === 'locality' || type === 'place') {
-                            processedFeature.place_name = '🏢 ' + processedFeature.place_name;
-                        } else {
-                            processedFeature.place_name = '📍 ' + processedFeature.place_name;
-                        }
-                    }
+                    // Store the processed results for use in the UI
+                    this._lastProcessedResults = processedFeatures;
 
-                    // 2. Calculate distance from map center if coordinates are available
-                    if (processedFeature.center && map.getCenter()) {
-                        try {
-                            const distance = turf.distance(
-                                turf.point([map.getCenter().lng, map.getCenter().lat]),
-                                turf.point(processedFeature.center),
-                                { units: 'kilometers' }
-                            );
+                    // Optionally, you could clear the current results and re-trigger with your processed data
+                    // This would be a more advanced approach that would need careful handling
+                }
+            }
 
-                            // Add distance as a property
-                            processedFeature.properties = processedFeature.properties || {};
-                            processedFeature.properties.distance = distance.toFixed(1);
+            // Handle a selected result
+            _interceptResult = (event) => {
+                console.log('Selected result intercepted:', event);
 
-                            // Add distance to the place name
-                            processedFeature.place_name += ` (${distance.toFixed(1)} km)`;
-                        } catch (e) {
-                            console.error('Error calculating distance:', e);
-                        }
-                    }
+                // Special handling for custom results
+                if (event.result && event.result.properties && event.result.properties.isZtoveLocation) {
+                    console.log('Selected a custom Ztove location!');
+                    highlightPointInSidebar(event.result);
+                }
+            }
 
-                    // 3. Add any other custom properties or modifications
-                    processedFeature.properties = processedFeature.properties || {};
-                    processedFeature.properties.processed = true;
-                    processedFeature.properties.processedAt = new Date().toISOString();
+            // Custom method to process and modify results
+            _processResults(event) {
+                const features = event.features ? { features: [...event.features] } : { features: [] };
+                console.log('Processing original results:', features);
 
-                    return processedFeature;
-                });
+                if (!features || !features.features || features.features.length === 0) {
+                    console.log('No features to process');
+                    return features;
+                }
 
-                // Add custom results at the beginning
+                // Define custom results you want to add
                 const customResults = [
                     {
-                        id: 'custom-result-1',
-                        place_name: '⭐ CUSTOM: Prioritized Result',
-                        center: [10.7522, 59.9139], // Oslo coordinates
-                        place_type: ['custom'],
+                        id: 'custom-1',
+                        place_name: '🏠 Custom Location: Oslo Central',
+                        center: [10.7522, 59.9139],
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [10.7522, 59.9139]
+                        },
+                        place_type: ['address'],
                         properties: {
                             custom: true,
-                            id: 'custom-1',
-                            description: 'This is a custom result added during processing'
+                            description: 'A custom location in Oslo'
                         }
                     }
                 ];
 
-                // Combine custom results with processed API results
-                const finalResults = [...customResults, ...processedFeatures];
+                // Find nearest locations from your dataset if available
+                if (appData.points && appData.points.length > 0) {
+                    // Try to use the first search result's coordinates
+                    const firstResult = features.features[0];
 
-                console.log('Processed results:', finalResults);
-                return finalResults;
+                    if (firstResult && firstResult.geometry) {
+                        const searchCoords = firstResult.geometry.coordinates;
+                        console.log('Finding nearest points to:', searchCoords);
+
+                        const nearestPoints = this._findNearestPoints(searchCoords, appData.points, 3);
+                        console.log('Found nearest points:', nearestPoints.length);
+
+                        // Add nearest points to results
+                        nearestPoints.forEach((point, index) => {
+                            customResults.push({
+                                id: `nearest-${index}`,
+                                place_name: `📍 Ztove Location: ${point.properties.name} (${point.properties.distance.toFixed(1)}km)`,
+                                center: point.geometry.coordinates,
+                                geometry: {
+                                    type: 'Point',
+                                    coordinates: point.geometry.coordinates
+                                },
+                                place_type: ['poi'],
+                                properties: {
+                                    ...point.properties,
+                                    custom: true,
+                                    isZtoveLocation: true
+                                }
+                            });
+                        });
+                    }
+                }
+
+                // Combine custom results with original results
+                console.log('Adding custom results:', customResults.length);
+                features.features = [...customResults, ...features.features];
+
+                return features;
+            }
+
+            // Helper method to find nearest points from your dataset
+            _findNearestPoints(coordinates, points, limit = 3) {
+                if (!points || points.length === 0) return [];
+
+                try {
+                    // Calculate distances for all points
+                    const pointsWithDistance = points.map(point => {
+                        const from = turf.point(coordinates);
+                        const to = turf.point(point.geometry.coordinates);
+                        const distance = turf.distance(from, to, { units: 'kilometers' });
+
+                        return {
+                            ...point,
+                            properties: {
+                                ...point.properties,
+                                distance: distance
+                            }
+                        };
+                    });
+
+                    // Sort by distance and take the top 'limit'
+                    return pointsWithDistance
+                        .sort((a, b) => a.properties.distance - b.properties.distance)
+                        .slice(0, limit);
+                } catch (e) {
+                    console.error('Error finding nearest points:', e);
+                    return [];
+                }
             }
         }
 
@@ -548,78 +608,16 @@
             countries: 'no,se,fi,dk',
             zoom: 14,
             mapboxgl: mapboxgl,
-            placeholder: 'Type "Osl" to see custom processing...',
-            // Custom item rendering (optional)
-            render: function (item) {
-                let markup;
-
-                // Custom rendering for items
-                if (item.properties && item.properties.custom) {
-                    // Render custom items differently
-                    markup = `
-                        <div class='mapboxgl-ctrl-geocoder--suggestion'>
-                            <div class='mapboxgl-ctrl-geocoder--suggestion-title' style='color:#4264fb;font-weight:bold'>
-                                ${item.place_name}
-                            </div>
-                            <div class='mapboxgl-ctrl-geocoder--suggestion-address'>
-                                ${item.properties.description || 'Custom result'}
-                            </div>
-                        </div>
-                    `;
-                } else if (item.properties && item.properties.distance) {
-                    // Render items with distance calculation
-                    markup = `
-                        <div class='mapboxgl-ctrl-geocoder--suggestion'>
-                            <div class='mapboxgl-ctrl-geocoder--suggestion-title'>
-                                ${item.text || item.place_name.split(',')[0]}
-                            </div>
-                            <div class='mapboxgl-ctrl-geocoder--suggestion-address'>
-                                ${item.properties.distance}km away - ${item.place_name}
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    // Default rendering
-                    markup = `
-                        <div class='mapboxgl-ctrl-geocoder--suggestion'>
-                            <div class='mapboxgl-ctrl-geocoder--suggestion-title'>
-                                ${item.text || item.place_name.split(',')[0]}
-                            </div>
-                            <div class='mapboxgl-ctrl-geocoder--suggestion-address'>
-                                ${item.place_name}
-                            </div>
-                        </div>
-                    `;
-                }
-
-                return markup;
-            }
+            placeholder: 'Search for locations near Ztove...',
+            // Debug mode can help see internal events
+            debug: true
         });
 
         // Add the geocoder to the map
         map.addControl(geocoder);
 
-        // Optional: Add event listeners for debugging
-        geocoder.on('results', function (results) {
-            console.log('Results event after processing:', results);
-        });
 
-        geocoder.on('result', function (event) {
-            const result = event.result;
-            console.log('Selected result:', result);
 
-            if (result.properties && result.properties.custom) {
-                console.log('Custom item selected:', result.properties.id);
-                // Handle custom item selection
-                alert('Selected custom item: ' + result.properties.id);
-            }
-        });
-
-        geocoder.on('error', function (error) {
-            console.error('Geocoder error:', error);
-        });
-
-        console.log('Custom geocoder initialized and ready');
     </script>
 </body>
 
