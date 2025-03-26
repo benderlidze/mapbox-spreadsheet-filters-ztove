@@ -237,12 +237,13 @@
                 position: absolute;
                 left: 0;
                 bottom: 0;
-                height: 90vh;
+                height: 40px;
                 z-index: 1000;
                 right: 0;
                 border-radius: 10px 10px 0px 0px;
                 box-shadow: 0 -5px 4px rgba(0, 0, 0, 0.1);
                 transition: height 0.5s ease;
+                background-color: #dbdbdc;
             }
 
             #mobile-header {
@@ -471,10 +472,18 @@
             mapDiv.addEventListener('transitionend', onTransitionEnd);
         });
 
+
+
         // Rest of your existing code
         const bounds = new mapboxgl.LngLatBounds();
 
+
+
+
         map.on('load', () => {
+
+            console.log('JSON.s', JSON.s);
+            map.resize()
             // Load the custom icon image
             map.loadImage('icon_.png', (error, image) => {
                 if (error) throw error;
