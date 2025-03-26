@@ -285,6 +285,8 @@
     <script>
 
         const infoDiv = document.getElementById('info');
+        const mobileHeader = document.getElementById('mobile-header');
+        const mapDiv = document.getElementById('map');
 
         const appData = {
             points: [],
@@ -448,6 +450,16 @@
         document.addEventListener('click', (e) => {
             if (!geocoderInput.contains(e.target) && !geocoderResults.contains(e.target)) {
                 geocoderResults.style.display = 'none';
+            }
+        });
+
+        mobileHeader.addEventListener('click', () => {
+            mapDiv.style.height = '90vh';
+            if (map) {
+                map.resize();
+                map.fitBounds(bounds, {
+                    maxZoom: 10
+                });
             }
         });
 
