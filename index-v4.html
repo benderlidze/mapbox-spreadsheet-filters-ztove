@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Style circles with a data-driven property</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+
+    <!-- Removed MapboxGeocoder plugin links -->
+
+    <!-- Google Fonts - Rubik -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+    <script src="https://npmcdn.com/@turf/turf/turf.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Rubik', sans-serif;
+        }
+
+        #map {
+            flex: 1;
+            height: 100vh;
+        }
+
+        .mapboxgl-popup.mapboxgl-popup-anchor-top {
+            max-width: 400px !important;
+        }
+
+        .main {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+        }
+
+        #info {
+            display: flex;
+            flex-direction: column;
+            width: 30%;
+            padding: 20px;
+            background: white;
+            overflow-y: auto;
+        }
+
+        .location-item {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background: #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .location-item:hover {
+            /* transform: translateY(-2px); */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .location-name {
+            margin: 0 0 8px 0;
+            font-size: 18px;
+            color: #333;
+            font-weight: 600;
+            font-family: 'Rubik', sans-serif;
+        }
+
+        .location-detail {
+            margin: 4px 0;
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+        }
+
+        .location-detail svg {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+        }
+
+        .priority-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .info-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out;
+            opacity: 0;
+            margin-top: 0;
+        }
+
+        .info-detail.expanded {
+            max-height: 500px;
+            /* Set to a value larger than your content would need */
+            opacity: 1;
+            margin-top: 10px;
+        }
+
+        .toggle-btn {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .toggle-icon.rotated {
+            transform: rotate(45deg);
+        }
+
+        .availabel-detail {
+            color: #1daf30;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Custom Geocoder styles */
+        .custom-geocoder {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+            width: 350px;
+        }
+
+        .geocoder-input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            font-family: 'Rubik', sans-serif;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        .geocoder-results {
+            position: absolute;
+            width: 100%;
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 4px;
+            margin-top: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .geocoder-result-item {
+            padding: 4px 6px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .geocoder-result-item:hover {
+            background-color: #f9f9f9;
+        }
+
+        .geocoder-result-name {
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .geocoder-result-address {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .custom-result {
+            background-color: #e3f2fd;
+        }
+
+        .opening-hours-item {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="main">
+        <div id="map">
+            <!-- Custom geocoder HTML -->
+            <div class="custom-geocoder">
+                <input type="text" class="geocoder-input" placeholder="Search for a location" id="geocoder-input">
+                <div class="geocoder-results" id="geocoder-results"></div>
+            </div>
+        </div>
+        <div id="info"></div>
+    </div>
+
+    <script>
+
+        const infoDiv = document.getElementById('info');
+
+        const appData = {
+            points: [],
+        };
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            zoom: 0,
+            center: { lng: -0.02665959675479712, lat: 2 },
+            projection: 'mercator'
+        });
+
+        // Custom geocoder implementation
+        const geocoderInput = document.getElementById('geocoder-input');
+        const geocoderResults = document.getElementById('geocoder-results');
+        let geocodeTimeout;
+
+        // Function to perform geocoding search
+        async function performGeocode(query) {
+            if (!query || query.length < 3) {
+                geocoderResults.style.display = 'none';
+                return;
+            }
+
+            try {
+                const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`;
+                const params = new URLSearchParams({
+                    access_token: mapboxgl.accessToken,
+                    limit: 5,
+                    country: 'no,se,fi,dk',
+                });
+
+                const response = await fetch(`${endpoint}?${params.toString()}`);
+                const data = await response.json();
+
+                // Process and display results
+                displayGeocodeResults(data);
+            } catch (error) {
+                console.error('Geocoding error:', error);
+            }
+        }
+
+        // Function to display geocode results
+        function displayGeocodeResults(data) {
+            // Clear previous results
+            geocoderResults.innerHTML = '';
+
+            // Add our custom results to the features array
+            const features = data.features || [];
+
+            const firstResult = features[0].center
+            console.log('firstResult', firstResult);
+
+            if (appData.points.length > 0) {
+                // Define a point from the first result coordinates
+                const searchPoint = turf.point(firstResult);
+
+                // Find nearby points within 30km
+                const nearbyPoints = appData.points
+                    .map(point => {
+                        // Calculate distance in kilometers
+                        const pointCoords = point.geometry.coordinates;
+                        const pointObj = turf.point(pointCoords);
+                        const distance = turf.distance(searchPoint, pointObj, { units: 'kilometers' });
+
+                        return {
+                            ...point,
+                            distance: distance
+                        };
+                    })
+                    .filter(point => point.distance <= 30) // Only points within 30km
+                    .sort((a, b) => a.distance - b.distance) // Sort by distance ascending
+                    .slice(0, 3) // Take first 3 results
+                    .sort((a, b) => b.distance - a.distance); // Sort by priority
+
+                // Add nearby points to features
+                nearbyPoints.forEach((point, index) => {
+
+                    const address = point.properties.Address + ' ' + point.properties.City + ', ' + point.properties.Country;
+
+                    features.unshift({
+                        id: `nearby-${index}`,
+                        place_name: `<img src="icon_.png" style="width:8px;"> ${point.properties.name} (${point.distance.toFixed(1)} km)`,
+                        text_name: point.properties.name,
+                        center: point.geometry.coordinates,
+                        geometry: {
+                            type: 'Point',
+                            coordinates: point.geometry.coordinates
+                        },
+                        properties: {
+                            ...point.properties,
+                            distance: point.distance,
+                            isNearbyZtove: true
+                        },
+                        address
+                    });
+                });
+
+                console.log(`Added ${nearbyPoints.length} nearby Ztove locations to results`);
+            }
+
+
+
+            // // Add a custom result
+            // features.unshift({
+            //     id: 'custom-result',
+            //     place_name: 'My Custom Location',
+            //     center: [-122.4, 37.8],
+            //     geometry: {
+            //         type: 'Point',
+            //         coordinates: [-122.4, 37.8]
+            //     },
+            //     properties: {
+            //         custom: true
+            //     }
+            // });
+
+
+            // You can add more custom results here or filter out unwanted results
+
+            // Display results
+            if (features.length > 0) {
+                features.forEach(feature => {
+                    const resultItem = document.createElement('div');
+                    resultItem.className = `geocoder-result-item ${feature.properties?.custom ? 'custom-result' : ''}`;
+
+                    resultItem.innerHTML = `
+                        <div class="geocoder-result-name">${feature.place_name.split(',')[0]}</div>
+                        <div class="geocoder-result-address">${feature.address}</div>
+                    `;
+
+                    resultItem.addEventListener('click', () => {
+                        // Handle selection of a result
+                        geocoderInput.value = feature.text_name;
+                        geocoderResults.style.display = 'none';
+
+                        // Fly to the selected location
+                        map.flyTo({
+                            center: feature.center,
+                            zoom: 13
+                        });
+
+                        // // Optionally add a marker
+                        // new mapboxgl.Marker()
+                        //     .setLngLat(feature.center)
+                        //     .addTo(map);
+                    });
+
+                    geocoderResults.appendChild(resultItem);
+                });
+
+                geocoderResults.style.display = 'block';
+            } else {
+                geocoderResults.style.display = 'none';
+            }
+        }
+
+        // Event listeners for geocoder
+        geocoderInput.addEventListener('input', (e) => {
+            const query = e.target.value;
+
+            // Debounce input
+            clearTimeout(geocodeTimeout);
+            geocodeTimeout = setTimeout(() => {
+                performGeocode(query);
+            }, 300);
+        });
+
+        // Close results when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!geocoderInput.contains(e.target) && !geocoderResults.contains(e.target)) {
+                geocoderResults.style.display = 'none';
+            }
+        });
+
+        // Rest of your existing code
+        const bounds = new mapboxgl.LngLatBounds();
+
+        map.on('load', () => {
+            // Load the custom icon image
+            map.loadImage('icon_.png', (error, image) => {
+                if (error) throw error;
+
+                // Add the image to the map's style
+                map.addImage('custom-marker', image);
+
+                // Now proceed with data loading
+                d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?output=csv")
+                    .then(data => {
+                        console.log(data);
+
+                        // Filter out rows with invalid coordinates
+                        const points = data
+                            .filter((row) => {
+                                const lat = parseFloat(row["Latitude"]);
+                                const lon = parseFloat(row["Longitude"]);
+                                return !isNaN(lat) && !isNaN(lon) &&
+                                    lat >= -90 && lat <= 90 &&
+                                    lon >= -180 && lon <= 180;
+                            })
+                            .filter(row => row.FALSE === "TRUE")
+                            .map((row, index) => {
+                                const lat = parseFloat(row["Latitude"]);
+                                const lon = parseFloat(row["Longitude"]);
+                                const name = row["Name"];
+                                const country = row["Country"];
+                                const priority = row["Priority"];
+
+                                // Safely extend bounds with valid coordinates
+                                bounds.extend([lon, lat]);
+
+                                return {
+                                    type: 'Feature',
+                                    geometry: {
+                                        type: 'Point',
+                                        coordinates: [lon, lat]
+                                    },
+                                    properties: {
+                                        id: index,
+                                        name,
+                                        country,
+                                        ...row
+                                    }
+                                }
+                            });
+
+                        map.getSource('points').setData({
+                            type: 'FeatureCollection',
+                            features: points
+                        });
+
+                        // Only fit bounds if we have valid points
+
+                        map.fitBounds(bounds, {
+                            padding: 50,
+                            maxZoom: 10
+                        });
+
+
+                        console.log(points);
+                        appData.points = points;
+
+
+                        generateItems(points);
+                    })
+                    .catch(error => {
+                        console.error("Error loading CSV data:", error);
+                    });
+            });
+
+            map.addSource('points', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            map.addLayer({
+                id: 'points',
+                source: 'points',
+                type: 'symbol',
+                layout: {
+                    'icon-image': 'custom-marker',
+                    'icon-size': 1.0,
+                    'icon-allow-overlap': true,
+                    'icon-anchor': 'bottom'
+                }
+            });
+
+            // map.addLayer({
+            //     id: 'points-label',
+            //     type: 'circle',
+            //     source: 'points',
+            //     paint: {
+            //         'circle-radius': 6,
+            //         'circle-color': '#1976d2',
+            //         'circle-stroke-color': '#fff',
+            //         'circle-stroke-width': 1
+            //     }
+            // });
+
+
+            map.on("mouseenter", "points", (e) => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on("mouseleave", "points", (e) => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on("click", "points", (e) => {
+                const row = e.features[0].properties;
+                // const popup = new mapboxgl.Popup()
+                //     .setLngLat(e.lngLat)
+                //     .setHTML(`
+                //         <h3>${row.name}</h3>
+                //         <p>${row.country}</p>
+                //         <p>${row.priority}</p>
+                //     `)
+                //     .addTo(map);
+
+                map.flyTo({
+                    center: e.features[0].geometry.coordinates,
+                    zoom: 12
+                });
+
+                console.log('row', row);
+
+                // Find and scroll to the corresponding list item
+                const locationItem = document.getElementById(`location-${row.id}`);
+                if (locationItem) {
+                    // Scroll the item into view
+                    infoDiv.scrollTo({
+                        top: locationItem.offsetTop - infoDiv.offsetTop,
+                        behavior: 'smooth'
+                    });
+
+                    // Add a highlight effect
+                    locationItem.style.backgroundColor = '#f5f5f5';
+                    setTimeout(() => {
+                        locationItem.style.backgroundColor = '';
+                    }, 2000);
+
+                    // Expand the item details if not already expanded
+                    const infoDetail = locationItem.querySelector('.info-detail');
+                    const toggleIcon = locationItem.querySelector('.toggle-icon');
+
+                    if (infoDetail && !infoDetail.classList.contains('expanded')) {
+                        infoDetail.classList.add('expanded');
+                        if (toggleIcon) toggleIcon.classList.add('rotated');
+                    }
+                }
+            });
+
+            map.on("moveend", () => {
+                //filterByBounds(map.getBounds())
+            });
+
+            function filterByBounds(bounds) {
+                // Create a polygon from the current bounds
+                const bbox = [
+                    bounds.getWest(),
+                    bounds.getSouth(),
+                    bounds.getEast(),
+                    bounds.getNorth()
+                ];
+                const bboxPolygon = turf.bboxPolygon(bbox);
+
+                // // Add a source and layer for the bbox if they don't exist yet
+                // if (!map.getSource('bbox')) {
+                //     map.addSource('bbox', {
+                //         type: 'geojson',
+                //         data: bboxPolygon
+                //     });
+
+                //     map.addLayer({
+                //         'id': 'bbox-layer',
+                //         'type': 'line',
+                //         'source': 'bbox',
+                //         'layout': {},
+                //         'paint': {
+                //             'line-color': '#088',
+                //             'line-width': 2,
+                //             'line-dasharray': [2, 2]
+                //         }
+                //     });
+                // } else {
+                //     // Update existing source with new bbox
+                //     map.getSource('bbox').setData(bboxPolygon);
+                // }
+
+                const visiblePoints = appData.points.filter(point => {
+                    return turf.booleanPointInPolygon(point, bboxPolygon);
+                });
+
+                // Update the list
+                generateItems(visiblePoints);
+            }
+
+            function generateItems(itemsArray) {
+
+                infoDiv.innerHTML = '';
+
+                itemsArray.forEach(item => {
+
+                    const container = document.createElement('div');
+                    container.className = 'location-item';
+                    container.id = `location-${item.properties.id}`;
+
+                    const h3 = document.createElement('h3');
+                    h3.className = 'location-name';
+                    h3.innerText = item.properties['Mettia Cagan'];
+                    h3.addEventListener('click', () => {
+                        map.flyTo({
+                            center: item.geometry.coordinates,
+                            zoom: 12
+                        });
+                    });
+
+                    const available = document.createElement('div');
+                    available.className = 'availabel-detail';
+                    available.innerHTML = `Ztove is available`;
+
+                    const toggleDiv = document.createElement('div');
+                    toggleDiv.className = 'location-detail toggle-btn';
+                    toggleDiv.innerHTML = `
+                        <div class="row" style="align-items: center; width: 100%; user-select:none">
+                            Opening hours and address
+                            <svg class="toggle-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M4 12h16M12 4v16" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                    `;
+
+                    const monday = `<div class="opening-hours-item"><div class="day">Monday:</div><div class="time">${item.properties.Monday || 'N/A'}</div></div>`;
+                    const tuesday = `<div class="opening-hours-item"><div class="day">Tuesday:</div><div class="time">${item.properties.Tuesday || 'N/A'}</div></div>`;
+                    const wednesday = `<div class="opening-hours-item"><div class="day">Wednesday:</div><div class="time">${item.properties.Wednesday || 'N/A'}</div></div>`;
+                    const thursday = `<div class="opening-hours-item"><div class="day">Thursday:</div><div class="time">${item.properties.Thursday || 'N/A'}</div></div>`;
+                    const friday = `<div class="opening-hours-item"><div class="day">Friday:</div><div class="time">${item.properties.Friday || 'N/A'}</div></div>`;
+                    const saturday = `<div class="opening-hours-item"><div class="day">Saturday:</div><div class="time">${item.properties.Saturday || 'N/A'}</div></div>`;
+                    const sunday = `<div class="opening-hours-item"><div class="day">Sunday:</div><div class="time">${item.properties.Sunday || 'N/A'}</div></div>`;
+
+                    const address = item.properties.Address + ', ' + item.properties.City + ', ' + item.properties.Country;
+                    const additionalInfo = document.createElement('div');
+                    additionalInfo.className = 'info-detail';
+                    additionalInfo.innerHTML = `
+                        <div class="column">
+                            <div>${monday}</div>
+                            <div>${tuesday}</div>
+                            <div>${wednesday}</div>
+                            <div>${thursday}</div>
+                            <div>${friday}</div>
+                            <div>${saturday}</div>
+                            <div>${sunday}</div>
+                        </div>
+                        <div class="row">
+                            <div style="width:15px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                                    <circle cx="12" cy="10" r="3" />
+                                </svg>
+                            </div>
+                            <div>${address}</div>
+                        </div>
+                    `;
+
+                    // Add toggle functionality
+                    toggleDiv.addEventListener('click', () => {
+                        // Toggle expanded class on additionalInfo
+                        additionalInfo.classList.toggle('expanded');
+
+                        // Toggle the rotation of the plus icon
+                        const toggleIcon = toggleDiv.querySelector('.toggle-icon');
+                        toggleIcon.classList.toggle('rotated');
+                    });
+
+                    container.appendChild(h3);
+                    container.appendChild(available);
+                    container.appendChild(toggleDiv);
+                    container.appendChild(additionalInfo);
+
+
+                    infoDiv.appendChild(container);
+                });
+            }
+
+        });
+
+
+
+
+
+
+    </script>
+</body>
+
+</html>
