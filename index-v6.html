@@ -237,11 +237,12 @@
                 position: absolute;
                 left: 0;
                 bottom: 0;
-                height: 40px;
+                height: 90vh;
                 z-index: 1000;
                 right: 0;
                 border-radius: 10px 10px 0px 0px;
                 box-shadow: 0 -5px 4px rgba(0, 0, 0, 0.1);
+                transition: height 0.5s ease;
             }
 
             #mobile-header {
@@ -453,14 +454,21 @@
             }
         });
 
+        let isOpen = false;
+        let firstOpen = true;
         mobileHeader.addEventListener('click', () => {
-            mapDiv.style.height = '90vh';
-            if (map) {
-                map.resize();
-                map.fitBounds(bounds, {
-                    maxZoom: 10
-                });
-            }
+            mapDiv.style.height = isOpen ? '40px' : '90vh';
+            isOpen = !isOpen;
+
+            const onTransitionEnd = () => {
+                console.log('onTransitionEnd',);
+                isOpen && map.resize();
+                firstOpen && map.fitBounds(bounds, { maxZoom: 10 });
+                mapDiv.removeEventListener('transitionend', onTransitionEnd);
+                firstOpen = false;
+            };
+
+            mapDiv.addEventListener('transitionend', onTransitionEnd);
         });
 
         // Rest of your existing code
