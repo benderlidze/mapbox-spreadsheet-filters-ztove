@@ -366,6 +366,9 @@
                             zoom: 13
                         });
 
+
+                        handleLocationSelection(feature.id);
+
                     });
 
                     geocoderResults.appendChild(resultItem);
@@ -501,57 +504,6 @@
             //         'circle-stroke-width': 1
             //     }
             // });
-
-            // Function to handle location selection from either map markers or list items
-            function handleLocationSelection(locationId) {
-                const locationItem = document.getElementById(`location-${locationId}`);
-                if (locationItem) {
-                    // Remove highlight from previously highlighted item if exists
-                    if (appData.currentHighlightedItem && appData.currentHighlightedItem !== locationItem) {
-                        appData.currentHighlightedItem.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
-                    }
-
-                    // Collapse all other expanded items
-                    const allExpandedItems = infoDiv.querySelectorAll('.info-detail.expanded');
-                    const allRotatedIcons = infoDiv.querySelectorAll('.toggle-icon.rotated');
-
-                    allExpandedItems.forEach(item => {
-                        if (item.parentNode !== locationItem) {
-                            item.classList.remove('expanded');
-                        }
-                    });
-
-                    allRotatedIcons.forEach(icon => {
-                        if (!locationItem.contains(icon)) {
-                            icon.classList.remove('rotated');
-                        }
-                    });
-
-                    // Expand the item details if not already expanded
-                    const infoDetail = locationItem.querySelector('.info-detail');
-                    const toggleIcon = locationItem.querySelector('.toggle-icon');
-
-                    if (infoDetail && !infoDetail.classList.contains('expanded')) {
-                        infoDetail.classList.add('expanded');
-                        if (toggleIcon) toggleIcon.classList.add('rotated');
-                    }
-
-                    // Wait for expansion to complete before scrolling
-                    setTimeout(() => {
-                        // Calculate position to show the full expanded card
-                        infoDiv.scrollTo({
-                            top: Math.max(0, locationItem.offsetTop - infoDiv.offsetTop - 20),
-                            behavior: 'smooth'
-                        });
-                    }, 500);
-
-                    // Add green shadow highlight
-                    locationItem.style.boxShadow = '0 0 8px 2px rgba(29, 175, 48, 0.6)';
-
-                    // Store the current highlighted item
-                    appData.currentHighlightedItem = locationItem;
-                }
-            }
 
             map.on("mouseenter", "points", (e) => {
                 map.getCanvas().style.cursor = 'pointer';
@@ -712,7 +664,56 @@
         });
 
 
+        // Function to handle location selection from either map markers or list items
+        function handleLocationSelection(locationId) {
+            const locationItem = document.getElementById(`location-${locationId}`);
+            if (locationItem) {
+                // Remove highlight from previously highlighted item if exists
+                if (appData.currentHighlightedItem && appData.currentHighlightedItem !== locationItem) {
+                    appData.currentHighlightedItem.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                }
 
+                // Collapse all other expanded items
+                const allExpandedItems = infoDiv.querySelectorAll('.info-detail.expanded');
+                const allRotatedIcons = infoDiv.querySelectorAll('.toggle-icon.rotated');
+
+                allExpandedItems.forEach(item => {
+                    if (item.parentNode !== locationItem) {
+                        item.classList.remove('expanded');
+                    }
+                });
+
+                allRotatedIcons.forEach(icon => {
+                    if (!locationItem.contains(icon)) {
+                        icon.classList.remove('rotated');
+                    }
+                });
+
+                // Expand the item details if not already expanded
+                const infoDetail = locationItem.querySelector('.info-detail');
+                const toggleIcon = locationItem.querySelector('.toggle-icon');
+
+                if (infoDetail && !infoDetail.classList.contains('expanded')) {
+                    infoDetail.classList.add('expanded');
+                    if (toggleIcon) toggleIcon.classList.add('rotated');
+                }
+
+                // Wait for expansion to complete before scrolling
+                setTimeout(() => {
+                    // Calculate position to show the full expanded card
+                    infoDiv.scrollTo({
+                        top: Math.max(0, locationItem.offsetTop - infoDiv.offsetTop - 20),
+                        behavior: 'smooth'
+                    });
+                }, 500);
+
+                // Add green shadow highlight
+                locationItem.style.boxShadow = '0 0 8px 2px rgba(29, 175, 48, 0.6)';
+
+                // Store the current highlighted item
+                appData.currentHighlightedItem = locationItem;
+            }
+        }
 
 
 
