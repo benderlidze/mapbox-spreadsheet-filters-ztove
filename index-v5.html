@@ -172,7 +172,6 @@
 
         .geocoder-results {
             position: absolute;
-            width: 100%;
             max-height: 300px;
             overflow-y: auto;
             background: white;
@@ -180,10 +179,11 @@
             margin-top: 5px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             display: none;
+            z-index: 1000;
         }
 
         .geocoder-result-item {
-            padding: 4px 6px;
+            padding: 10px 6px;
             cursor: pointer;
             border-bottom: 1px solid #f0f0f0;
         }
@@ -279,6 +279,8 @@
 
         // Function to display geocode results
         function displayGeocodeResults(data) {
+            console.log('data', data);
+
             // Clear previous results
             geocoderResults.innerHTML = '';
 
@@ -316,7 +318,8 @@
                     const address = point.properties.Address + ' ' + point.properties.City + ', ' + point.properties.Country;
 
                     features.unshift({
-                        id: `nearby-${index}`,
+                        //id: `nearby-${index}`,
+                        id: point.properties.id,
                         place_name: `<img src="icon_.png" style="width:8px;"> ${point.properties.name} (${point.distance.toFixed(1)} km)`,
                         text_name: point.properties.name,
                         center: point.geometry.coordinates,
@@ -336,34 +339,20 @@
                 console.log(`Added ${nearbyPoints.length} nearby Ztove locations to results`);
             }
 
-
-
-            // // Add a custom result
-            // features.unshift({
-            //     id: 'custom-result',
-            //     place_name: 'My Custom Location',
-            //     center: [-122.4, 37.8],
-            //     geometry: {
-            //         type: 'Point',
-            //         coordinates: [-122.4, 37.8]
-            //     },
-            //     properties: {
-            //         custom: true
-            //     }
-            // });
-
-
-            // You can add more custom results here or filter out unwanted results
-
             // Display results
             if (features.length > 0) {
                 features.forEach(feature => {
+
+                    console.log('feature', feature);
+
                     const resultItem = document.createElement('div');
                     resultItem.className = `geocoder-result-item ${feature.properties?.custom ? 'custom-result' : ''}`;
 
+                    const secondLine = feature.address ?? feature.place_name
+
                     resultItem.innerHTML = `
                         <div class="geocoder-result-name">${feature.place_name.split(',')[0]}</div>
-                        <div class="geocoder-result-address">${feature.address}</div>
+                        <div class="geocoder-result-address">${secondLine}</div>
                     `;
 
                     resultItem.addEventListener('click', () => {
@@ -435,7 +424,7 @@
                             .map((row, index) => {
                                 const lat = parseFloat(row["Latitude"]);
                                 const lon = parseFloat(row["Longitude"]);
-                                const name = row["Name"];
+                                const name = row["Mettia Cagan"];
                                 const country = row["Country"];
                                 const priority = row["Priority"];
 
