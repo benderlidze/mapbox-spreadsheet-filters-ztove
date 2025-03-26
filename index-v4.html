@@ -230,6 +230,7 @@
 
         const appData = {
             points: [],
+            currentHighlightedItem: null // Add this to track the currently highlighted item
         };
 
         mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
@@ -530,27 +531,36 @@
                 //     `)
                 //     .addTo(map);
 
-                map.flyTo({
-                    center: e.features[0].geometry.coordinates,
-                    zoom: 12
-                });
+                // map.flyTo({
+                //     center: e.features[0].geometry.coordinates,
+                //     zoom: 12
+                // });
 
                 console.log('row', row);
 
                 // Find and scroll to the corresponding list item
                 const locationItem = document.getElementById(`location-${row.id}`);
                 if (locationItem) {
-                    // Scroll the item into view
-                    infoDiv.scrollTo({
-                        top: locationItem.offsetTop - infoDiv.offsetTop,
-                        behavior: 'smooth'
+                    // First, remove highlight from the previously highlighted item if exists
+                    if (appData.currentHighlightedItem && appData.currentHighlightedItem !== locationItem) {
+                        appData.currentHighlightedItem.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                    }
+
+                    // First collapse all other expanded items
+                    const allExpandedItems = infoDiv.querySelectorAll('.info-detail.expanded');
+                    const allRotatedIcons = infoDiv.querySelectorAll('.toggle-icon.rotated');
+
+                    allExpandedItems.forEach(item => {
+                        if (item.parentNode !== locationItem) {
+                            item.classList.remove('expanded');
+                        }
                     });
 
-                    // Add a highlight effect
-                    locationItem.style.backgroundColor = '#f5f5f5';
-                    setTimeout(() => {
-                        locationItem.style.backgroundColor = '';
-                    }, 2000);
+                    allRotatedIcons.forEach(icon => {
+                        if (!locationItem.contains(icon)) {
+                            icon.classList.remove('rotated');
+                        }
+                    });
 
                     // Expand the item details if not already expanded
                     const infoDetail = locationItem.querySelector('.info-detail');
@@ -560,6 +570,21 @@
                         infoDetail.classList.add('expanded');
                         if (toggleIcon) toggleIcon.classList.add('rotated');
                     }
+
+                    // Wait for expansion to complete before scrolling
+                    setTimeout(() => {
+                        // Calculate position to show the full expanded card
+                        infoDiv.scrollTo({
+                            top: Math.max(0, locationItem.offsetTop - infoDiv.offsetTop - 20),
+                            behavior: 'smooth'
+                        });
+                    }, 500);
+
+                    // Add green shadow highlight without timeout to remove it
+                    locationItem.style.boxShadow = '0 0 8px 2px rgba(29, 175, 48, 0.6)';
+
+                    // Store the current highlighted item
+                    appData.currentHighlightedItem = locationItem;
                 }
             });
 
