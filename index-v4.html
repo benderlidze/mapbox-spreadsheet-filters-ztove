@@ -38,13 +38,21 @@
             height: 100vh;
         }
 
-        #info {
+        #bar {
             display: flex;
             flex-direction: column;
             width: 30%;
-            padding: 20px;
+
             background: white;
             overflow-y: auto;
+        }
+
+        #info {
+            display: flex;
+            flex-direction: column;
+            background: white;
+            overflow-y: auto;
+            padding: 20px;
         }
 
         .location-item {
@@ -221,7 +229,9 @@
                 <div class="geocoder-results" id="geocoder-results"></div>
             </div>
         </div>
-        <div id="info"></div>
+        <div id="bar">
+            <div id="info"></div>
+        </div>
     </div>
 
     <script>
@@ -512,41 +522,16 @@
             //     }
             // });
 
-
-            map.on("mouseenter", "points", (e) => {
-                map.getCanvas().style.cursor = 'pointer';
-            });
-            map.on("mouseleave", "points", (e) => {
-                map.getCanvas().style.cursor = '';
-            });
-
-            map.on("click", "points", (e) => {
-                const row = e.features[0].properties;
-                // const popup = new mapboxgl.Popup()
-                //     .setLngLat(e.lngLat)
-                //     .setHTML(`
-                //         <h3>${row.name}</h3>
-                //         <p>${row.country}</p>
-                //         <p>${row.priority}</p>
-                //     `)
-                //     .addTo(map);
-
-                // map.flyTo({
-                //     center: e.features[0].geometry.coordinates,
-                //     zoom: 12
-                // });
-
-                console.log('row', row);
-
-                // Find and scroll to the corresponding list item
-                const locationItem = document.getElementById(`location-${row.id}`);
+            // Function to handle location selection from either map markers or list items
+            function handleLocationSelection(locationId) {
+                const locationItem = document.getElementById(`location-${locationId}`);
                 if (locationItem) {
-                    // First, remove highlight from the previously highlighted item if exists
+                    // Remove highlight from previously highlighted item if exists
                     if (appData.currentHighlightedItem && appData.currentHighlightedItem !== locationItem) {
                         appData.currentHighlightedItem.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
                     }
 
-                    // First collapse all other expanded items
+                    // Collapse all other expanded items
                     const allExpandedItems = infoDiv.querySelectorAll('.info-detail.expanded');
                     const allRotatedIcons = infoDiv.querySelectorAll('.toggle-icon.rotated');
 
@@ -580,12 +565,27 @@
                         });
                     }, 500);
 
-                    // Add green shadow highlight without timeout to remove it
+                    // Add green shadow highlight
                     locationItem.style.boxShadow = '0 0 8px 2px rgba(29, 175, 48, 0.6)';
 
                     // Store the current highlighted item
                     appData.currentHighlightedItem = locationItem;
                 }
+            }
+
+            map.on("mouseenter", "points", (e) => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on("mouseleave", "points", (e) => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on("click", "points", (e) => {
+                const row = e.features[0].properties;
+                console.log('row', row);
+
+                // Use the new function for handling location selection
+                handleLocationSelection(row.id);
             });
 
             map.on("moveend", () => {
@@ -642,16 +642,25 @@
                     const container = document.createElement('div');
                     container.className = 'location-item';
                     container.id = `location-${item.properties.id}`;
-
-                    const h3 = document.createElement('h3');
-                    h3.className = 'location-name';
-                    h3.innerText = item.properties['Mettia Cagan'];
-                    h3.addEventListener('click', () => {
+                    container.addEventListener('click', () => {
                         map.flyTo({
                             center: item.geometry.coordinates,
                             zoom: 12
                         });
+                        handleLocationSelection(item.properties.id);
                     });
+
+                    const h3 = document.createElement('h3');
+                    h3.className = 'location-name';
+                    h3.innerText = item.properties['Mettia Cagan'];
+
+                    // h3.addEventListener('click', () => {
+                    //     map.flyTo({
+                    //         center: item.geometry.coordinates,
+                    //         zoom: 12
+                    //     });
+                    //     handleLocationSelection(item.properties.id);
+                    // });
 
                     const available = document.createElement('div');
                     available.className = 'availabel-detail';
