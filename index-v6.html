@@ -219,6 +219,15 @@
             display: none;
         }
 
+        /* Add SVG rotation styling */
+        #mobile-header svg {
+            transition: transform 0.3s ease;
+        }
+
+        #mobile-header svg.rotated {
+            transform: rotate(180deg);
+        }
+
         @media (max-width: 768px) {
             .main {
                 flex-direction: column;
@@ -461,6 +470,12 @@
             mapDiv.style.height = isOpen ? '40px' : '90vh';
             isOpen = !isOpen;
 
+            // Toggle the rotation class on the SVG
+            const headerSvg = mobileHeader.querySelector('svg');
+            if (headerSvg) {
+                headerSvg.classList.toggle('rotated', isOpen);
+            }
+
             const onTransitionEnd = () => {
                 console.log('onTransitionEnd',);
                 isOpen && map.resize();
@@ -472,13 +487,26 @@
             mapDiv.addEventListener('transitionend', onTransitionEnd);
         });
 
+        // Also update the window resize handler to manage SVG rotation state
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                // Reset to desktop view
+                mapDiv.style.height = '100vh';
+                map.resize();
+            } else {
+                // Maintain current state in mobile view
+                mapDiv.style.height = isOpen ? '90vh' : '40px';
 
+                // Ensure SVG rotation matches the current state
+                const headerSvg = mobileHeader.querySelector('svg');
+                if (headerSvg) {
+                    headerSvg.classList.toggle('rotated', isOpen);
+                }
+            }
+        });
 
         // Rest of your existing code
         const bounds = new mapboxgl.LngLatBounds();
-
-
-
 
         map.on('load', () => {
 
@@ -604,6 +632,7 @@
 
             map.on("moveend", () => {
                 //filterByBounds(map.getBounds())
+                // map.resize()
             });
 
             function filterByBounds(bounds) {
