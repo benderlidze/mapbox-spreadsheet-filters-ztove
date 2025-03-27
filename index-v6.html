@@ -156,7 +156,7 @@
 
         /* Custom Geocoder styles */
         .custom-geocoder {
-            border: 1px solid gray;
+            /* border: 1px solid gray; */
             margin: 10px 20px;
         }
 
@@ -165,10 +165,12 @@
             padding: 10px;
             border: none;
             border-radius: 4px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
             font-family: 'Rubik', sans-serif;
             font-size: 16px;
             box-sizing: border-box;
+
+            outline: none;
         }
 
         .geocoder-results {
@@ -268,6 +270,23 @@
                 border-radius: 10px 10px 0px 0px;
             }
         }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 200;
+            margin: 0;
+        }
+
+        .search-header {
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+        }
+
+        #cross {
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -285,8 +304,21 @@
             </div>
         </div>
         <div id="bar">
+
+            <div class="search-header">
+                <div>
+                    <h1>Experience Ztove</h1>
+                    <small>Find nearest store</small>
+                </div>
+                <div id="cross">
+                    <svg width="40" heht="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="black" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
             <div class="custom-geocoder">
-                <input type="text" class="geocoder-input" placeholder="Search for a location" id="geocoder-input">
+                <input type="text" class="geocoder-input" placeholder="Insert postal code or city" id="geocoder-input">
                 <div class="geocoder-results" id="geocoder-results"></div>
             </div>
             <div id="info"></div>
