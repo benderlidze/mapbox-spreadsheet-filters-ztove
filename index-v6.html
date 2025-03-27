@@ -333,7 +333,7 @@
 
         const appData = {
             points: [],
-            currentHighlightedItem: null // Add this to track the currently highlighted item
+            currentHighlightedItem: null
         };
 
         mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
@@ -811,6 +811,24 @@
         function handleLocationSelection(locationId) {
             const locationItem = document.getElementById(`location-${locationId}`);
             if (locationItem) {
+
+                if (appData.currentHighlightedItem && appData.currentHighlightedItem === locationItem) {
+                    // If the same item is clicked again, collapse the details
+                    const infoDetail = locationItem.querySelector('.info-detail');
+                    const toggleIcon = locationItem.querySelector('.toggle-icon');
+
+                    if (infoDetail && infoDetail.classList.contains('expanded')) {
+                        infoDetail.classList.remove('expanded');
+                        if (toggleIcon) toggleIcon.classList.remove('rotated');
+                    }
+
+                    // Clear the current highlighted item
+                    appData.currentHighlightedItem.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                    appData.currentHighlightedItem = null;
+                    return;
+                }
+
+
                 // Remove highlight from previously highlighted item if exists
                 if (appData.currentHighlightedItem && appData.currentHighlightedItem !== locationItem) {
                     appData.currentHighlightedItem.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
