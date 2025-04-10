@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Style circles with a data-driven property</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+
+    <!-- Removed MapboxGeocoder plugin links -->
+
+    <!-- Google Fonts - Rubik -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+    <script src="https://npmcdn.com/@turf/turf/turf.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Rubik', sans-serif;
+        }
+
+        #map {
+            flex: 1;
+            height: 100vh;
+        }
+
+        .mapboxgl-popup.mapboxgl-popup-anchor-top {
+            max-width: 400px !important;
+        }
+
+        .main {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+        }
+
+
+        #bar {
+            display: flex;
+            flex-direction: column;
+            width: 30%;
+
+            background: white;
+            overflow-y: auto;
+        }
+
+        #info {
+            display: flex;
+            flex-direction: column;
+            background: white;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .location-item {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background: #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .location-item:hover {
+            /* transform: translateY(-2px); */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .location-name {
+            margin: 0 0 8px 0;
+            font-size: 18px;
+            color: #333;
+            font-weight: 600;
+            font-family: 'Rubik', sans-serif;
+        }
+
+        .location-detail {
+            margin: 4px 0;
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+        }
+
+        .location-detail svg {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+        }
+
+        .priority-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .info-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out;
+            opacity: 0;
+            margin-top: 0;
+        }
+
+        .info-detail.expanded {
+            max-height: 500px;
+            /* Set to a value larger than your content would need */
+            opacity: 1;
+            margin-top: 10px;
+        }
+
+        .toggle-btn {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .toggle-icon.rotated {
+            transform: rotate(45deg);
+        }
+
+        .availabel-detail {
+            color: #1daf30;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Custom Geocoder styles */
+        .custom-geocoder {
+            /* border: 1px solid gray; */
+            margin: 10px 20px;
+            position: relative;
+            /* Add this to create a positioning context */
+        }
+
+        .geocoder-input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            font-family: 'Rubik', sans-serif;
+            font-size: 16px;
+            box-sizing: border-box;
+
+            outline: none;
+        }
+
+        .geocoder-results {
+            position: absolute;
+            max-height: 300px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 4px;
+            margin-top: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+            z-index: 1000;
+            width: 100%;
+            /* Match width of input */
+            left: 0;
+            /* Align with left edge of container */
+            right: 0;
+            /* Align with right edge of container */
+        }
+
+        .geocoder-result-item {
+            padding: 10px 6px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .geocoder-result-item:hover {
+            background-color: #f9f9f9;
+        }
+
+        .geocoder-result-name {
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .geocoder-result-address {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .custom-result {
+            background-color: #e3f2fd;
+        }
+
+        .opening-hours-item {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+
+        }
+
+        #mobile-header {
+            display: none;
+        }
+
+        /* Add SVG rotation styling */
+        #mobile-header svg {
+            transition: transform 0.3s ease;
+        }
+
+        #mobile-header svg.rotated {
+            transform: rotate(180deg);
+        }
+
+        @media (max-width: 768px) {
+            .main {
+                flex-direction: column;
+            }
+
+            #bar {
+                width: 100%;
+                height: 100vh;
+            }
+
+            #info {
+                padding: 10px;
+            }
+
+            #map {
+                position: absolute;
+                left: 0;
+                bottom: 0;
+                height: 40px;
+                z-index: 1000;
+                right: 0;
+                border-radius: 10px 10px 0px 0px;
+                box-shadow: 0 -5px 4px rgba(0, 0, 0, 0.1);
+                transition: height 0.5s ease;
+                background-color: #dbdbdc;
+            }
+
+            #mobile-header {
+                position: relative;
+                display: flex;
+                justify-content: center;
+                background: white;
+                padding: 10px;
+                font-size: 18px;
+                font-weight: 500;
+                z-index: 1111;
+                gap: 10px;
+                border-radius: 10px 10px 0px 0px;
+            }
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 200;
+            margin: 0;
+        }
+
+        .search-header {
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+        }
+
+        #cross {
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="main">
+        <div id="map">
+            <div id="mobile-header">
+                Map
+                <svg fill="#000000" width="20px" height="20px" viewBox="0 0 32 32" version="1.1"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <title>up</title>
+                    <path d="M11.25 15.688l-7.656 7.656-3.594-3.688 11.063-11.094 11.344 11.344-3.5 3.5z"></path>
+                </svg>
+            </div>
+        </div>
+        <div id="bar">
+
+            <div class="search-header">
+                <div>
+                    <h1>Experience Ztove</h1>
+                    <small>Find nearest store</small>
+                </div>
+                <div id="cross">
+                    <svg width="40" heht="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="black" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="custom-geocoder">
+                <input type="text" class="geocoder-input" placeholder="Insert postal code or city" id="geocoder-input">
+                <div class="geocoder-results" id="geocoder-results"></div>
+            </div>
+            <div id="info"></div>
+        </div>
+    </div>
+
+    <script>
+
+        const spreadheetUrlList = {
+            Denmark: {
+                link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=0&single=true&output=csv",
+                center: { lat: 56.2639, lng: 9.5018 }
+            },
+            Sweden: {
+                link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=73192359&single=true&output=csv",
+                center: { lat: 60.1282, lng: 18.6435 }
+            },
+            Norway: {
+                link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=750262830&single=true&output=csv",
+                center: { lat: 60.4720, lng: 8.4689 }
+            },
+            Finland: {
+                link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=666941906&single=true&output=csv",
+                center: { lat: 61.9241, lng: 25.7482 }
+            },
+        }
+
+        const country = new URLSearchParams(window.location.search).get('country') || 'Denmark';
+        const spreadheetUrl = spreadheetUrlList[country].link;
+        const center = spreadheetUrlList[country].center;
+
+
+        const infoDiv = document.getElementById('info');
+        const mobileHeader = document.getElementById('mobile-header');
+        const mapDiv = document.getElementById('map');
+
+        const appData = {
+            points: [],
+            currentHighlightedItem: null
+        };
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            zoom: 0,
+            center: center,
+            projection: 'mercator'
+        });
+
+        // Custom geocoder implementation
+        const geocoderInput = document.getElementById('geocoder-input');
+        const geocoderResults = document.getElementById('geocoder-results');
+        let geocodeTimeout;
+
+        // Function to perform geocoding search
+        async function performGeocode(queryInput) {
+
+            const query = queryInput
+                .toLowerCase()
+                .replace(/å/g, 'aa').trim();
+
+            console.log('query', query);
+
+            if (!query || query.length < 3) {
+                geocoderResults.style.display = 'none';
+                return;
+            }
+
+            try {
+                const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`;
+                const params = new URLSearchParams({
+                    access_token: mapboxgl.accessToken,
+                    limit: 5,
+                    country: 'no,se,fi,dk',
+                });
+
+                const response = await fetch(`${endpoint}?${params.toString()}`);
+                const data = await response.json();
+
+                // Process and display results
+                displayGeocodeResults(data);
+            } catch (error) {
+                console.error('Geocoding error:', error);
+            }
+        }
+
+        // Function to display geocode results
+        function displayGeocodeResults(data) {
+            console.log('data', data);
+
+            // Clear previous results
+            geocoderResults.innerHTML = '';
+
+            // Add our custom results to the features array
+            //const features = data.features || [];
+            const features = []; //DO not use mapbox results from geocoding  data.features
+
+            const firstResult = data.features[0].center
+            console.log('firstResult', firstResult);
+
+            if (appData.points.length > 0) {
+                // Define a point from the first result coordinates
+                const searchPoint = turf.point(firstResult);
+
+                // Find nearby points within 30km
+                const nearbyPoints = appData.points
+                    .map(point => {
+                        // Calculate distance in kilometers
+                        const pointCoords = point.geometry.coordinates;
+                        const pointObj = turf.point(pointCoords);
+                        const distance = turf.distance(searchPoint, pointObj, { units: 'kilometers' });
+
+                        return {
+                            ...point,
+                            distance: distance
+                        };
+                    })
+                    .filter(point => point.distance <= 30) // Only points within 30km
+                    .sort((a, b) => a.distance - b.distance) // Sort by distance ascending
+                    .slice(0, 3) // Take first 3 results
+                    .sort((a, b) => b.distance - a.distance); // Sort by priority
+
+                // Add nearby points to features
+                nearbyPoints.forEach((point, index) => {
+
+                    const address = point.properties.Address + ' ' + point.properties.City + ', ' + point.properties.Country;
+
+                    features.unshift({
+                        //id: `nearby-${index}`,
+                        id: point.properties.id,
+                        place_name: `<img src="icon_.png" style="width:8px;"> ${point.properties.name}`,
+                        text_name: point.properties.name,
+                        center: point.geometry.coordinates,
+                        geometry: {
+                            type: 'Point',
+                            coordinates: point.geometry.coordinates
+                        },
+                        properties: {
+                            ...point.properties,
+                            distance: point.distance,
+                            isNearbyZtove: true
+                        },
+                        address
+                    });
+                });
+
+                console.log(`Added ${nearbyPoints.length} nearby Ztove locations to results`);
+            }
+
+            // Display results
+            if (features.length > 0) {
+                features
+                    .forEach(feature => {
+
+                        console.log('feature', feature);
+
+                        const resultItem = document.createElement('div');
+                        resultItem.className = `geocoder-result-item ${feature.properties?.custom ? 'custom-result' : ''}`;
+
+                        const secondLine = feature.address ?? feature.place_name
+
+                        resultItem.innerHTML = `
+                        <div class="geocoder-result-name">${feature.place_name.split(',')[0]}</div>
+                        <div class="geocoder-result-address">${secondLine}</div>
+                    `;
+
+                        resultItem.addEventListener('click', () => {
+                            // Handle selection of a result
+                            geocoderInput.value = feature.text_name;
+                            geocoderResults.style.display = 'none';
+
+                            // Fly to the selected location
+                            map.flyTo({
+                                center: feature.center,
+                                zoom: 13
+                            });
+
+
+                            handleLocationSelection(feature.id);
+
+                        });
+
+                        geocoderResults.appendChild(resultItem);
+                    });
+
+                geocoderResults.style.display = 'block';
+            } else {
+                geocoderResults.style.display = 'none';
+            }
+        }
+
+        // Event listeners for geocoder
+        geocoderInput.addEventListener('input', (e) => {
+            const query = e.target.value;
+
+            // Debounce input
+            clearTimeout(geocodeTimeout);
+            geocodeTimeout = setTimeout(() => {
+                performGeocode(query);
+            }, 300);
+        });
+
+        // Close results when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!geocoderInput.contains(e.target) && !geocoderResults.contains(e.target)) {
+                geocoderResults.style.display = 'none';
+            }
+        });
+
+        let isOpen = false;
+        let firstOpen = true;
+        mobileHeader.addEventListener('click', () => {
+            mapDiv.style.height = isOpen ? '40px' : '90vh';
+            isOpen = !isOpen;
+
+            // Toggle the rotation class on the SVG
+            const headerSvg = mobileHeader.querySelector('svg');
+            if (headerSvg) {
+                headerSvg.classList.toggle('rotated', isOpen);
+            }
+
+            const onTransitionEnd = () => {
+                console.log('onTransitionEnd',);
+                isOpen && map.resize();
+                firstOpen && map.fitBounds(bounds, { maxZoom: 10 });
+                mapDiv.removeEventListener('transitionend', onTransitionEnd);
+                firstOpen = false;
+            };
+
+            mapDiv.addEventListener('transitionend', onTransitionEnd);
+        });
+
+        // Also update the window resize handler to manage SVG rotation state
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                // Reset to desktop view
+                mapDiv.style.height = '100vh';
+                map.resize();
+            } else {
+                // Maintain current state in mobile view
+                mapDiv.style.height = isOpen ? '90vh' : '40px';
+
+                // Ensure SVG rotation matches the current state
+                const headerSvg = mobileHeader.querySelector('svg');
+                if (headerSvg) {
+                    headerSvg.classList.toggle('rotated', isOpen);
+                }
+            }
+        });
+
+        // Rest of your existing code
+        const bounds = new mapboxgl.LngLatBounds();
+
+        map.on('load', () => {
+
+            console.log('JSON.s', JSON.s);
+            map.resize()
+            // Load the custom icon image
+            map.loadImage('icon_.png', (error, image) => {
+                if (error) throw error;
+
+                // Add the image to the map's style
+                map.addImage('custom-marker', image);
+
+                // Now proceed with data loading
+                d3.csv(spreadheetUrl)
+                    .then(data => {
+                        console.log(data);
+
+                        // Filter out rows with invalid coordinates
+                        const points = data
+                            .filter((row) => {
+                                const lat = parseFloat(row["Latitude"]);
+                                const lon = parseFloat(row["Longitude"]);
+                                return !isNaN(lat) && !isNaN(lon) &&
+                                    lat >= -90 && lat <= 90 &&
+                                    lon >= -180 && lon <= 180;
+                            })
+                            .filter(row => row.FALSE === "TRUE")
+                            .map((row, index) => {
+                                const lat = parseFloat(row["Latitude"]);
+                                const lon = parseFloat(row["Longitude"]);
+                                const name = row["Mettia Cagan"];
+                                const country = row["Country"];
+                                const priority = row["Priority"];
+
+                                // Safely extend bounds with valid coordinates
+                                bounds.extend([lon, lat]);
+
+                                return {
+                                    type: 'Feature',
+                                    geometry: {
+                                        type: 'Point',
+                                        coordinates: [lon, lat]
+                                    },
+                                    properties: {
+                                        id: index,
+                                        name,
+                                        country,
+                                        ...row
+                                    }
+                                }
+                            });
+
+                        map.getSource('points').setData({
+                            type: 'FeatureCollection',
+                            features: points
+                        });
+
+                        // Only fit bounds if we have valid points
+
+                        map.fitBounds(bounds, {
+                            padding: 0,
+                            maxZoom: 10
+                        });
+
+
+                        console.log(points);
+                        appData.points = points;
+
+
+                        generateItems(points);
+                    })
+                    .catch(error => {
+                        console.error("Error loading CSV data:", error);
+                    });
+            });
+
+            map.addSource('points', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            map.addLayer({
+                id: 'points',
+                source: 'points',
+                type: 'symbol',
+                layout: {
+                    'icon-image': 'custom-marker',
+                    'icon-size': 1.0,
+                    'icon-allow-overlap': true,
+                    'icon-anchor': 'bottom'
+                }
+            });
+
+            // map.addLayer({
+            //     id: 'points-label',
+            //     type: 'circle',
+            //     source: 'points',
+            //     paint: {
+            //         'circle-radius': 6,
+            //         'circle-color': '#1976d2',
+            //         'circle-stroke-color': '#fff',
+            //         'circle-stroke-width': 1
+            //     }
+            // });
+
+            map.on("mouseenter", "points", (e) => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on("mouseleave", "points", (e) => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on("click", "points", (e) => {
+                const row = e.features[0].properties;
+                console.log('row', row);
+
+                // Use the new function for handling location selection
+                handleLocationSelection(row.id);
+            });
+
+            map.on("moveend", () => {
+                //filterByBounds(map.getBounds())
+                // map.resize()
+            });
+
+            function filterByBounds(bounds) {
+                // Create a polygon from the current bounds
+                const bbox = [
+                    bounds.getWest(),
+                    bounds.getSouth(),
+                    bounds.getEast(),
+                    bounds.getNorth()
+                ];
+                const bboxPolygon = turf.bboxPolygon(bbox);
+
+                // // Add a source and layer for the bbox if they don't exist yet
+                // if (!map.getSource('bbox')) {
+                //     map.addSource('bbox', {
+                //         type: 'geojson',
+                //         data: bboxPolygon
+                //     });
+
+                //     map.addLayer({
+                //         'id': 'bbox-layer',
+                //         'type': 'line',
+                //         'source': 'bbox',
+                //         'layout': {},
+                //         'paint': {
+                //             'line-color': '#088',
+                //             'line-width': 2,
+                //             'line-dasharray': [2, 2]
+                //         }
+                //     });
+                // } else {
+                //     // Update existing source with new bbox
+                //     map.getSource('bbox').setData(bboxPolygon);
+                // }
+
+                const visiblePoints = appData.points.filter(point => {
+                    return turf.booleanPointInPolygon(point, bboxPolygon);
+                });
+
+                // Update the list
+                generateItems(visiblePoints);
+            }
+
+            function generateItems(itemsArray) {
+
+                infoDiv.innerHTML = '';
+
+                itemsArray.forEach(item => {
+
+                    const container = document.createElement('div');
+                    container.className = 'location-item';
+                    container.id = `location-${item.properties.id}`;
+                    container.addEventListener('click', () => {
+                        map.flyTo({
+                            center: item.geometry.coordinates,
+                            zoom: 12
+                        });
+                        handleLocationSelection(item.properties.id);
+                    });
+
+                    const h3 = document.createElement('h3');
+                    h3.className = 'location-name';
+                    h3.innerText = item.properties['Mettia Cagan'];
+
+                    // h3.addEventListener('click', () => {
+                    //     map.flyTo({
+                    //         center: item.geometry.coordinates,
+                    //         zoom: 12
+                    //     });
+                    //     handleLocationSelection(item.properties.id);
+                    // });
+
+                    const available = document.createElement('div');
+                    available.className = 'availabel-detail';
+                    available.innerHTML = `Ztove is available`;
+
+                    const toggleDiv = document.createElement('div');
+                    toggleDiv.className = 'location-detail toggle-btn';
+                    toggleDiv.innerHTML = `
+                        <div class="row" style="align-items: center; width: 100%; user-select:none">
+                            Opening hours and address
+                            <svg class="toggle-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M4 12h16M12 4v16" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                    `;
+
+                    const monday = `<div class="opening-hours-item"><div class="day">Monday:</div><div class="time">${item.properties.Monday || 'N/A'}</div></div>`;
+                    const tuesday = `<div class="opening-hours-item"><div class="day">Tuesday:</div><div class="time">${item.properties.Tuesday || 'N/A'}</div></div>`;
+                    const wednesday = `<div class="opening-hours-item"><div class="day">Wednesday:</div><div class="time">${item.properties.Wednesday || 'N/A'}</div></div>`;
+                    const thursday = `<div class="opening-hours-item"><div class="day">Thursday:</div><div class="time">${item.properties.Thursday || 'N/A'}</div></div>`;
+                    const friday = `<div class="opening-hours-item"><div class="day">Friday:</div><div class="time">${item.properties.Friday || 'N/A'}</div></div>`;
+                    const saturday = `<div class="opening-hours-item"><div class="day">Saturday:</div><div class="time">${item.properties.Saturday || 'N/A'}</div></div>`;
+                    const sunday = `<div class="opening-hours-item"><div class="day">Sunday:</div><div class="time">${item.properties.Sunday || 'N/A'}</div></div>`;
+
+                    const address = item.properties.Address + ', ' + item.properties.City + ', ' + item.properties.Country;
+                    const additionalInfo = document.createElement('div');
+                    additionalInfo.className = 'info-detail';
+                    additionalInfo.innerHTML = `
+                        <div class="column">
+                            <div>${monday}</div>
+                            <div>${tuesday}</div>
+                            <div>${wednesday}</div>
+                            <div>${thursday}</div>
+                            <div>${friday}</div>
+                            <div>${saturday}</div>
+                            <div>${sunday}</div>
+                        </div>
+                        <div class="row">
+                            <div style="width:15px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                                    <circle cx="12" cy="10" r="3" />
+                                </svg>
+                            </div>
+                            <div>${address}</div>
+                        </div>
+                    `;
+
+                    // Add toggle functionality
+                    toggleDiv.addEventListener('click', () => {
+                        // Toggle expanded class on additionalInfo
+                        additionalInfo.classList.toggle('expanded');
+
+                        // Toggle the rotation of the plus icon
+                        const toggleIcon = toggleDiv.querySelector('.toggle-icon');
+                        toggleIcon.classList.toggle('rotated');
+                    });
+
+                    container.appendChild(h3);
+                    container.appendChild(available);
+                    container.appendChild(toggleDiv);
+                    container.appendChild(additionalInfo);
+
+
+                    infoDiv.appendChild(container);
+                });
+            }
+
+        });
+
+
+        // Function to handle location selection from either map markers or list items
+        function handleLocationSelection(locationId) {
+            const locationItem = document.getElementById(`location-${locationId}`);
+            if (locationItem) {
+
+                if (appData.currentHighlightedItem && appData.currentHighlightedItem === locationItem) {
+                    // If the same item is clicked again, collapse the details
+                    const infoDetail = locationItem.querySelector('.info-detail');
+                    const toggleIcon = locationItem.querySelector('.toggle-icon');
+
+                    if (infoDetail && infoDetail.classList.contains('expanded')) {
+                        infoDetail.classList.remove('expanded');
+                        if (toggleIcon) toggleIcon.classList.remove('rotated');
+                    }
+
+                    // Clear the current highlighted item
+                    appData.currentHighlightedItem.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                    appData.currentHighlightedItem = null;
+                    return;
+                }
+
+
+                // Remove highlight from previously highlighted item if exists
+                if (appData.currentHighlightedItem && appData.currentHighlightedItem !== locationItem) {
+                    appData.currentHighlightedItem.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                }
+
+                // Collapse all other expanded items
+                const allExpandedItems = infoDiv.querySelectorAll('.info-detail.expanded');
+                const allRotatedIcons = infoDiv.querySelectorAll('.toggle-icon.rotated');
+
+                allExpandedItems.forEach(item => {
+                    if (item.parentNode !== locationItem) {
+                        item.classList.remove('expanded');
+                    }
+                });
+
+                allRotatedIcons.forEach(icon => {
+                    if (!locationItem.contains(icon)) {
+                        icon.classList.remove('rotated');
+                    }
+                });
+
+                // Expand the item details if not already expanded
+                const infoDetail = locationItem.querySelector('.info-detail');
+                const toggleIcon = locationItem.querySelector('.toggle-icon');
+
+                if (infoDetail && !infoDetail.classList.contains('expanded')) {
+                    infoDetail.classList.add('expanded');
+                    if (toggleIcon) toggleIcon.classList.add('rotated');
+                }
+
+                // Wait for expansion to complete before scrolling
+                setTimeout(() => {
+                    // Calculate position to show the full expanded card
+                    infoDiv.scrollTo({
+                        top: Math.max(0, locationItem.offsetTop - infoDiv.offsetTop - 20),
+                        behavior: 'smooth'
+                    });
+                }, 500);
+
+                // Add green shadow highlight
+                locationItem.style.boxShadow = '0 0 8px 2px rgba(29, 175, 48, 0.6)';
+
+                // Store the current highlighted item
+                appData.currentHighlightedItem = locationItem;
+            }
+        }
+
+
+
+    </script>
+</body>
+
+</html>
