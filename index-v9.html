@@ -266,6 +266,7 @@
             }
 
             #mobile-header {
+                border: 1px solid red;
                 position: relative;
                 display: flex;
                 justify-content: center;
@@ -276,6 +277,11 @@
                 z-index: 1111;
                 gap: 10px;
                 border-radius: 10px 10px 0px 0px;
+                top: 0px;
+
+                cursor: pointer;
+
+
             }
         }
 
@@ -301,16 +307,7 @@
 <body>
 
     <div class="main">
-        <div id="map">
-            <div id="mobile-header">
-                Map
-                <svg fill="#000000" width="20px" height="20px" viewBox="0 0 32 32" version="1.1"
-                    xmlns="http://www.w3.org/2000/svg">
-                    <title>up</title>
-                    <path d="M11.25 15.688l-7.656 7.656-3.594-3.688 11.063-11.094 11.344 11.344-3.5 3.5z"></path>
-                </svg>
-            </div>
-        </div>
+        <div id="map"></div>
         <div id="bar">
 
             <div class="search-header">
@@ -330,6 +327,14 @@
                 <div class="geocoder-results" id="geocoder-results"></div>
             </div>
             <div id="info"></div>
+        </div>
+        <div id="mobile-header">
+            Map
+            <svg fill="#000000" width="20px" height="20px" viewBox="0 0 32 32" version="1.1"
+                xmlns="http://www.w3.org/2000/svg">
+                <title>up</title>
+                <path d="M11.25 15.688l-7.656 7.656-3.594-3.688 11.063-11.094 11.344 11.344-3.5 3.5z"></path>
+            </svg>
         </div>
     </div>
 
@@ -564,9 +569,13 @@
 
         let isOpen = false;
         let firstOpen = true;
+        // Modify the mobile header click handler
         mobileHeader.addEventListener('click', () => {
             mapDiv.style.height = isOpen ? '40px' : '90vh';
+            mobileHeader.style.top = isOpen ? '0px' : 'calc(-90vh + 40px)';
+
             isOpen = !isOpen;
+
 
             // Toggle the rotation class on the SVG
             const headerSvg = mobileHeader.querySelector('svg');
@@ -575,12 +584,12 @@
             }
 
             const onTransitionEnd = () => {
-                console.log('onTransitionEnd',);
-                isOpen && map.resize();
+                map.resize(); // Resize at end of transition
                 firstOpen && map.fitBounds(bounds, { maxZoom: 10 });
                 mapDiv.removeEventListener('transitionend', onTransitionEnd);
                 firstOpen = false;
             };
+
 
             mapDiv.addEventListener('transitionend', onTransitionEnd);
         });
@@ -608,6 +617,10 @@
 
         map.on('load', () => {
 
+            // map.on('idle', () => {
+            //     map.resize();
+            // });
+
             map.resize()
             // Load the custom icon image
             map.loadImage('icon_.png', (error, image) => {
@@ -616,11 +629,8 @@
                 // Add the image to the map's style
                 map.addImage('custom-marker', image);
 
-                console.log('spreadheetUrl', spreadheetUrl);
-
                 //poll for data to be loaded
                 const interval = setInterval(() => {
-                    console.log('appData.data', appData.data);
                     if (appData.data.length > 0) {
                         clearInterval(interval);
                         const allData = appData.data.reduce((acc, item) => {
@@ -678,11 +688,6 @@
 
                 // Use the new function for handling location selection
                 handleLocationSelection(row.id);
-            });
-
-            map.on("moveend", () => {
-                //filterByBounds(map.getBounds())
-                // map.resize()
             });
 
             function processCSVData(data) {
