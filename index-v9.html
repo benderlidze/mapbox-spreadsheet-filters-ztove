@@ -335,40 +335,63 @@
 
     <script>
 
-        const spreadheetUrlList = {
-            Denmark: {
-                link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=0&single=true&output=csv",
-                center: { lat: 56.2639, lng: 9.5018 }
+        const appData = {
+            points: [],
+            currentHighlightedItem: null,
+            spreadheets: {
+                Denmark: {
+                    link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=0&single=true&output=csv",
+                    center: { lat: 56.2639, lng: 9.5018 },
+                    data: []
+                },
+                Sweden: {
+                    link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=73192359&single=true&output=csv",
+                    center: { lat: 60.1282, lng: 18.6435 },
+                    data: []
+                },
+                Norway: {
+                    link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=750262830&single=true&output=csv",
+                    center: { lat: 60.4720, lng: 8.4689 },
+                    data: []
+                },
+                Finland: {
+                    link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=666941906&single=true&output=csv",
+                    center: { lat: 61.9241, lng: 25.7482 },
+                    data: []
+                },
             },
-            Sweden: {
-                link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=73192359&single=true&output=csv",
-                center: { lat: 60.1282, lng: 18.6435 }
-            },
-            Norway: {
-                link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=750262830&single=true&output=csv",
-                center: { lat: 60.4720, lng: 8.4689 }
-            },
-            Finland: {
-                link: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSmcOl0MNzYcXKNKI1sxlcxXcnC8uQbiCSQijeR17qpCFIft6uncuClvp1KAmvR_LfxP_QeTZkIWsJe/pub?gid=666941906&single=true&output=csv",
-                center: { lat: 61.9241, lng: 25.7482 }
-            },
+            data: [],
         }
 
         const country = new URLSearchParams(window.location.search).get('country') || 'Denmark';
+        const center = appData.spreadheets[country].center;
+        const boundsCountry = new URLSearchParams(window.location.search).get('bounds') || new URLSearchParams(window.location.search).get('country')
+
+        //if country is Denmark, load all data, else load only the selected country
         const spreadheetUrl = country === "Denmark"
-            ? Object.values(spreadheetUrlList).map(item => item.link)
-            : spreadheetUrlList[country].link;
-        const center = spreadheetUrlList[country].center;
+            ? Object.entries(appData.spreadheets)
+            : Object.entries(appData.spreadheets).filter(([key]) => key === country)
+
+        //load the data from the sheets
+        Promise.all(
+            spreadheetUrl.map(([country, item]) =>
+                d3.csv(item.link)
+                    .then(data => ({ country, data }))
+            )
+        )
+            .then(results => {
+                console.log('Data loaded with country names:', results);
+                appData.data = results
+            })
+            .catch(error => {
+                console.error("Error loading CSV data:", error);
+            });
 
 
         const infoDiv = document.getElementById('info');
         const mobileHeader = document.getElementById('mobile-header');
         const mapDiv = document.getElementById('map');
 
-        const appData = {
-            points: [],
-            currentHighlightedItem: null
-        };
 
         mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
         const map = new mapboxgl.Map({
@@ -595,22 +618,17 @@
 
                 console.log('spreadheetUrl', spreadheetUrl);
 
-                let sheets = [];
-                if (Array.isArray(spreadheetUrl)) {
-                    sheets = spreadheetUrl.map(url => d3.csv(url));
-                } else {
-                    sheets = [d3.csv(spreadheetUrl)];
-                }
-
-                Promise.all(sheets)
-                    .then(dataArrays => {
-                        // Flatten the array of arrays into a single array
-                        const allData = [].concat(...dataArrays);
+                //poll for data to be loaded
+                const interval = setInterval(() => {
+                    console.log('appData.data', appData.data);
+                    if (appData.data.length > 0) {
+                        clearInterval(interval);
+                        const allData = appData.data.reduce((acc, item) => {
+                            return acc.concat(item.data);
+                        }, []);
                         processCSVData(allData);
-                    })
-                    .catch(error => {
-                        console.error("Error loading CSV data:", error);
-                    });
+                    }
+                }, 100);
 
             });
 
@@ -668,7 +686,7 @@
             });
 
             function processCSVData(data) {
-                console.log(data);
+                console.log(data, country);
 
                 // Filter out rows with invalid coordinates
                 const points = data
@@ -688,7 +706,12 @@
                         const priority = row["Priority"];
 
                         // Safely extend bounds with valid coordinates
-                        bounds.extend([lon, lat]);
+                        if (boundsCountry && boundsCountry === row["Country"]) {
+                            bounds.extend([lon, lat]);
+                        }
+                        if (!boundsCountry) {
+                            bounds.extend([lon, lat]);
+                        }
 
                         return {
                             type: 'Feature',
@@ -710,12 +733,17 @@
                     features: points
                 });
 
+                console.log('bounds', bounds);
                 // Only fit bounds if we have valid points
+                if (!bounds.isEmpty()) {
+                    map.fitBounds(bounds, {
+                        padding: 0,
+                        maxZoom: 10
+                    });
+                } else {
+                    console.warn('No valid points to fit bounds to.');
+                }
 
-                map.fitBounds(bounds, {
-                    padding: 0,
-                    maxZoom: 10
-                });
 
                 console.log(points);
                 appData.points = points;
