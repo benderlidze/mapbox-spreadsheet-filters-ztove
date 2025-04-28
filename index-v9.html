@@ -355,7 +355,9 @@
         }
 
         const country = new URLSearchParams(window.location.search).get('country') || 'Denmark';
-        const spreadheetUrl = spreadheetUrlList[country].link;
+        const spreadheetUrl = country === "Denmark"
+            ? Object.values(spreadheetUrlList).map(item => item.link)
+            : spreadheetUrlList[country].link;
         const center = spreadheetUrlList[country].center;
 
 
@@ -591,69 +593,27 @@
                 // Add the image to the map's style
                 map.addImage('custom-marker', image);
 
-                // Now proceed with data loading
-                d3.csv(spreadheetUrl)
-                    .then(data => {
-                        console.log(data);
+                console.log('spreadheetUrl', spreadheetUrl);
 
-                        // Filter out rows with invalid coordinates
-                        const points = data
-                            .filter((row) => {
-                                const lat = parseFloat(row["Latitude"]);
-                                const lon = parseFloat(row["Longitude"]);
-                                return !isNaN(lat) && !isNaN(lon) &&
-                                    lat >= -90 && lat <= 90 &&
-                                    lon >= -180 && lon <= 180;
-                            })
-                            .filter(row => row.FALSE === "TRUE")
-                            .map((row, index) => {
-                                const lat = parseFloat(row["Latitude"]);
-                                const lon = parseFloat(row["Longitude"]);
-                                const name = row["Mettia Cagan"];
-                                const country = row["Country"];
-                                const priority = row["Priority"];
+                let sheets = [];
+                if (Array.isArray(spreadheetUrl)) {
+                    sheets = spreadheetUrl.map(url => d3.csv(url));
+                } else {
+                    sheets = [d3.csv(spreadheetUrl)];
+                }
 
-                                // Safely extend bounds with valid coordinates
-                                bounds.extend([lon, lat]);
-
-                                return {
-                                    type: 'Feature',
-                                    geometry: {
-                                        type: 'Point',
-                                        coordinates: [lon, lat]
-                                    },
-                                    properties: {
-                                        id: index,
-                                        name,
-                                        country,
-                                        ...row
-                                    }
-                                }
-                            });
-
-                        map.getSource('points').setData({
-                            type: 'FeatureCollection',
-                            features: points
-                        });
-
-                        // Only fit bounds if we have valid points
-
-                        map.fitBounds(bounds, {
-                            padding: 0,
-                            maxZoom: 10
-                        });
-
-
-                        console.log(points);
-                        appData.points = points;
-
-
-                        generateItems(points);
+                Promise.all(sheets)
+                    .then(dataArrays => {
+                        // Flatten the array of arrays into a single array
+                        const allData = [].concat(...dataArrays);
+                        processCSVData(allData);
                     })
                     .catch(error => {
                         console.error("Error loading CSV data:", error);
                     });
+
             });
+
 
             map.addSource('points', {
                 type: 'geojson',
@@ -707,6 +667,61 @@
                 // map.resize()
             });
 
+            function processCSVData(data) {
+                console.log(data);
+
+                // Filter out rows with invalid coordinates
+                const points = data
+                    .filter((row) => {
+                        const lat = parseFloat(row["Latitude"]);
+                        const lon = parseFloat(row["Longitude"]);
+                        return !isNaN(lat) && !isNaN(lon) &&
+                            lat >= -90 && lat <= 90 &&
+                            lon >= -180 && lon <= 180;
+                    })
+                    .filter(row => row.FALSE === "TRUE")
+                    .map((row, index) => {
+                        const lat = parseFloat(row["Latitude"]);
+                        const lon = parseFloat(row["Longitude"]);
+                        const name = row["Mettia Cagan"];
+                        const country = row["Country"];
+                        const priority = row["Priority"];
+
+                        // Safely extend bounds with valid coordinates
+                        bounds.extend([lon, lat]);
+
+                        return {
+                            type: 'Feature',
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [lon, lat]
+                            },
+                            properties: {
+                                id: index,
+                                name,
+                                country,
+                                ...row
+                            }
+                        }
+                    });
+
+                map.getSource('points').setData({
+                    type: 'FeatureCollection',
+                    features: points
+                });
+
+                // Only fit bounds if we have valid points
+
+                map.fitBounds(bounds, {
+                    padding: 0,
+                    maxZoom: 10
+                });
+
+                console.log(points);
+                appData.points = points;
+                generateItems(points);
+            }
+
             function filterByBounds(bounds) {
                 // Create a polygon from the current bounds
                 const bbox = [
@@ -716,29 +731,6 @@
                     bounds.getNorth()
                 ];
                 const bboxPolygon = turf.bboxPolygon(bbox);
-
-                // // Add a source and layer for the bbox if they don't exist yet
-                // if (!map.getSource('bbox')) {
-                //     map.addSource('bbox', {
-                //         type: 'geojson',
-                //         data: bboxPolygon
-                //     });
-
-                //     map.addLayer({
-                //         'id': 'bbox-layer',
-                //         'type': 'line',
-                //         'source': 'bbox',
-                //         'layout': {},
-                //         'paint': {
-                //             'line-color': '#088',
-                //             'line-width': 2,
-                //             'line-dasharray': [2, 2]
-                //         }
-                //     });
-                // } else {
-                //     // Update existing source with new bbox
-                //     map.getSource('bbox').setData(bboxPolygon);
-                // }
 
                 const visiblePoints = appData.points.filter(point => {
                     return turf.booleanPointInPolygon(point, bboxPolygon);
